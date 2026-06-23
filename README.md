@@ -10,7 +10,7 @@
 > a small engine resolves what to run, reclaims disk space, and deletes through
 > PowerShell's `ShouldProcess` — so **`-WhatIf` is real**, not a parallel code path.
 
-It cleans 55 targets across browsers, developer tools, apps, games, system caches, every
+It cleans 57 targets across browsers, developer tools, apps, games, system caches, every
 local disk, logs, Windows Update, and driver leftovers — all from one declarative registry
 with a real dry-run mode and a hard safety guard.
 
@@ -98,9 +98,10 @@ task on regardless of tier.
 
 - **Browsers** — Chrome, Edge, Firefox, Opera, Yandex, Brave (all profiles, cache /
   code cache / GPU cache / service-worker cache).
-- **DevTools** — npm, pip, Yarn, NuGet http cache, Gradle, VS Code, JetBrains IDEs,
-  package-manager caches (winget, Chocolatey, Scoop, conda, cargo, Go module cache), and
-  `docker system prune` (skipped if Docker isn't installed).
+- **DevTools** — npm, pip, Yarn, NuGet http cache, Gradle, VS Code, JetBrains
+  (caches/logs/temp), Nuitka build cache, Go build cache, Dart/Flutter Pub cache,
+  package-manager caches (winget, Chocolatey, Scoop, conda, cargo, Go module cache),
+  `pnpm store prune`, and `docker system prune` (each skipped if the tool isn't installed).
 - **Apps** — Windows app/UWP caches, Microsoft Teams (classic + new), Discord, Slack,
   Spotify, Office document/web cache, OneDrive logs, Adobe media & Camera Raw cache.
 - **Games** — launcher caches for Steam (shader/http/html), Epic, Battle.net, GOG.

@@ -447,8 +447,12 @@ function Get-CleanupTaskRegistry {
             '<USER>\AppData\Roaming\Code\CachedData\*',
             '<USER>\AppData\Roaming\Code\Code Cache\*',
             '<USER>\AppData\Roaming\Code\GPUCache\*')
-        New-CleanupTask jetbrains 'JetBrains IDE caches' DevTools Safe -Paths @(
-            '<USER>\AppData\Local\JetBrains\*\caches\*')
+        New-CleanupTask jetbrains 'JetBrains IDE caches, logs & temp' DevTools Safe -Paths @(
+            '<USER>\AppData\Local\JetBrains\*\caches\*',
+            '<USER>\AppData\Local\JetBrains\*\log\*',
+            '<USER>\AppData\Local\JetBrains\*\tmp\*')
+        New-CleanupTask nuitka 'Nuitka build cache' DevTools Safe -Paths @(
+            '<USER>\AppData\Local\Nuitka\*')
         New-CleanupTask docker 'Docker dangling images & build cache' DevTools Safe -Action {
             if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
                 Write-CleanupLog 'Docker not installed - skipped' 'Debug'; return $null
@@ -456,13 +460,24 @@ function Get-CleanupTaskRegistry {
             Invoke-NativeStep 'docker system prune -f' { & docker system prune -f *>$null } | Out-Null
             $null
         }
-        New-CleanupTask pkgmgr 'Package-manager caches (winget/choco/scoop/conda/cargo/go)' DevTools Safe -Paths @(
+        New-CleanupTask pnpm 'pnpm store (prune unreferenced)' DevTools Safe -Action {
+            if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+                Write-CleanupLog 'pnpm not installed - skipped' 'Debug'; return $null
+            }
+            # Blunt-deleting the store breaks hardlinks into existing node_modules and frees
+            # nothing for in-use packages; prune only removes unreferenced content.
+            Invoke-NativeStep 'pnpm store prune' { & pnpm store prune *>$null } | Out-Null
+            $null
+        }
+        New-CleanupTask pkgmgr 'Package-manager & build caches (winget/choco/scoop/conda/cargo/go/pub)' DevTools Safe -Paths @(
             '<USER>\AppData\Local\Microsoft\WinGet\Cache\*',
             '%ProgramData%\chocolatey\cache\*',
             '<USER>\scoop\cache\*',
             '<USER>\.conda\pkgs\*',
             '<USER>\.cargo\registry\cache\*',
-            '<USER>\go\pkg\mod\cache\download\*')
+            '<USER>\go\pkg\mod\cache\download\*',
+            '<USER>\AppData\Local\go-build\*',
+            '<USER>\AppData\Local\Pub\Cache\*')
 
         # ---------------- Apps / messengers (Safe) ----------------
         New-CleanupTask appcache 'Windows app cache' Apps Safe -Paths @(

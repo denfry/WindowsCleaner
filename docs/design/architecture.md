@@ -43,7 +43,7 @@ levels — a backstop against a malformed registry entry or an unexpanded variab
 
 ## Categories
 Browsers, DevTools, Apps, Games, System, Disks, Logs, Updates, Optimization
-(55 tasks total; `-ListTasks` prints the live list).
+(57 tasks total; `-ListTasks` prints the live list).
 
 ## Batch script
 `Cleanup-Windows-Senior.bat` is the dependency-free alternative. It mirrors the engine's
