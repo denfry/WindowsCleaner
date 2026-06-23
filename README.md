@@ -12,7 +12,20 @@
 
 It cleans 57 targets across browsers, developer tools, apps, games, system caches, every
 local disk, logs, Windows Update, and driver leftovers — all from one declarative registry
-with a real dry-run mode and a hard safety guard.
+with a real dry-run mode and a hard safety guard. A companion optimization engine applies
+29 reversible system tweaks, a troubleshooting engine scans for 13 common problems and
+repairs them, and a single menu ties everything together.
+
+## One command — the menu
+
+`WinSenior.ps1` is the single entry point. Run it (it self-elevates) and an interactive
+menu opens with detailed screens for cleanup, optimization, troubleshooting, undo, a
+restore point and a task/tweak/check listing. It drives all three engines, so every action
+keeps real `-WhatIf`, the safety guard and per-tweak undo.
+
+```powershell
+.\WinSenior.ps1
+```
 
 ## Highlights
 
@@ -120,6 +133,73 @@ task on regardless of tier.
 - **Optimization** — DISM analyze / component cleanup / reset base, StartComponentCleanup
   task, SFC. Skipped entirely with `-SkipOptimization`.
 
+## Optimization
+
+`Optimize-Windows-Senior.ps1` is a second registry-driven engine that changes Windows
+settings instead of deleting files. Every tweak is one declarative entry; the engine
+snapshots prior state into a backup manifest before applying, so `-Undo` reverts an entire
+run. A real restore point is created first as a second safety net.
+
+```powershell
+# Preview every tweak (no changes, real ShouldProcess)
+.\Optimize-Windows-Senior.ps1 -WhatIf
+
+# Apply the default privacy + performance set
+.\Optimize-Windows-Senior.ps1 -Area Privacy,Performance
+
+# Revert the most recent run
+.\Optimize-Windows-Senior.ps1 -Undo
+```
+
+It covers 29 tweaks across four areas:
+
+- **Performance** — visual effects to best performance, zero menu/startup delay,
+  High-Performance power plan, background apps off; (off by default) Ultimate plan,
+  SysMain / Windows Search off, hibernation off.
+- **Privacy** — telemetry policy, advertising ID, consumer features, tips/spotlight,
+  activity feed, Start web search and Cortana off; DiagTrack and dmwappushservice disabled;
+  CEIP / telemetry scheduled tasks off.
+- **Debloat** — curated junk UWP removal (default on); Xbox and comms apps (off by default);
+  Start-menu app suggestions off.
+- **Network** — GameDVR off, Game Mode on, network-throttling and multimedia reservation off;
+  (off by default) Nagle off, NDU service off.
+
+Debatable tweaks ship off by default — allowed by their tier but only applied when you toggle
+them on or `-Include` them. The engine never disables Defender real-time protection, never
+breaks Windows Update or the network stack wholesale, and never removes Edge or the Store.
+Removing UWP apps is partially irreversible; the manifest lists what to reinstall from the
+Store. `-ListTweaks` prints the live list, and `-Undo` reverts a run from its backup manifest
+(newest in `%ProgramData%\WinSenior\backups`, or a specific one with `-BackupManifest`).
+
+## Troubleshooting
+
+`Repair-Windows-Senior.ps1` is a third engine that diagnoses and repairs system health.
+Every check is one declarative entry: a read-only scan that returns OK / Warn / Fail, and an
+optional fix. The default flow is scan-then-choose — it scans (changing nothing), prints a
+health report, and lets you pick which detected issues to repair. Fixes run through
+`ShouldProcess` after a real restore point.
+
+```powershell
+# Scan, show the report, then choose what to repair
+.\Repair-Windows-Senior.ps1
+
+# Diagnose only - never change anything
+.\Repair-Windows-Senior.ps1 -ScanOnly
+
+# Non-interactive: auto-apply every fixable issue, including heavy repairs
+.\Repair-Windows-Senior.ps1 -FixAll -IncludeHeavy -Unattended
+```
+
+It runs 13 checks across eight categories: system image health (DISM), physical disk SMART
+health, low free space, volumes flagged for chkdsk, pending reboot, Windows Update components,
+internet & DNS, devices with driver errors, stopped critical services, Microsoft Defender
+health, WMI repository consistency, time synchronization, and recent critical/error events.
+
+Heavy repairs (SFC, DISM RestoreHealth, Windows Update reset, network stack reset) are included
+but only run when you select them, or pass `-FixAll -IncludeHeavy`. Repairs only ever improve
+health — the engine *enables* Defender real-time protection, it never disables it. `-ListChecks`
+prints the live list.
+
 ## Batch version
 
 `Cleanup-Windows-Senior.bat` is the simple, dependency-free alternative. v6 brings it to
@@ -151,8 +231,10 @@ Exit codes: `0` success, `2` administrator privileges required.
 
 ## Tests
 
-`tests\Cleanup-Windows-Senior.Tests.ps1` covers the pure logic (selection, safety guard,
-age filtering, formatting, and `-WhatIf` accounting). Requires Pester 5+:
+The `tests\*.Tests.ps1` files cover the pure logic of all three engines — selection, the
+safety guard, age filtering, formatting, `-WhatIf` accounting, a registry backup→apply→undo
+round-trip against a throwaway hive, and the troubleshooter's scan/fix dispatch. Requires
+Pester 5+:
 
 ```powershell
 Invoke-Pester -Path .\tests
