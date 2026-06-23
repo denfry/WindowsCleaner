@@ -15,7 +15,7 @@ jobs:
       - name: Syntax parse check
         shell: pwsh
         run: |
-          $files = './Cleanup-Windows-Senior.ps1','./Optimize-Windows-Senior.ps1','./WinSenior.ps1'
+          $files = './Cleanup-Windows-Senior.ps1','./Optimize-Windows-Senior.ps1','./Repair-Windows-Senior.ps1','./WinSenior.ps1'
           $failed = $false
           foreach ($f in $files) {
             $errors = $null
@@ -39,7 +39,7 @@ jobs:
       - name: PSScriptAnalyzer (fail on errors only)
         shell: pwsh
         run: |
-          $files = './Cleanup-Windows-Senior.ps1','./Optimize-Windows-Senior.ps1','./WinSenior.ps1'
+          $files = './Cleanup-Windows-Senior.ps1','./Optimize-Windows-Senior.ps1','./Repair-Windows-Senior.ps1','./WinSenior.ps1'
           $r = $files | ForEach-Object { Invoke-ScriptAnalyzer -Path $_ -Severity Error }
           if ($r) { $r | Format-Table -AutoSize | Out-String | Write-Host; Write-Error 'ScriptAnalyzer found error-level issues'; exit 1 }
           Write-Host 'No analyzer errors'

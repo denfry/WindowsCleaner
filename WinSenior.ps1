@@ -35,6 +35,7 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 $script:Root           = $PSScriptRoot
 $script:CleanupScript  = Join-Path $script:Root 'Cleanup-Windows-Senior.ps1'
 $script:OptimizeScript = Join-Path $script:Root 'Optimize-Windows-Senior.ps1'
+$script:RepairScript   = Join-Path $script:Root 'Repair-Windows-Senior.ps1'
 
 function Test-Admin {
     try {
@@ -44,7 +45,7 @@ function Test-Admin {
     } catch { $false }
 }
 
-foreach ($s in @($script:CleanupScript, $script:OptimizeScript)) {
+foreach ($s in @($script:CleanupScript, $script:OptimizeScript, $script:RepairScript)) {
     if (-not (Test-Path $s)) {
         Write-Host "Engine not found: $s" -ForegroundColor Red
         Write-Host 'Keep WinSenior.ps1 next to the two engine scripts.' -ForegroundColor Yellow
@@ -72,6 +73,7 @@ if (-not (Test-Admin)) {
 # Load the engines as libraries (their entry guards keep them from auto-running).
 . $script:CleanupScript
 . $script:OptimizeScript
+. $script:RepairScript
 
 # =====================================================================
 # SELECTION STATE
@@ -258,6 +260,32 @@ function Invoke-FullRun {
 }
 
 # =====================================================================
+# TROUBLESHOOT SCREEN
+# =====================================================================
+function Show-TroubleshootScreen {
+    while ($true) {
+        Write-Banner 'Troubleshoot - scan & repair'
+        Write-Host '  Scans for common Windows problems (read-only), then lets you repair them.' -ForegroundColor DarkGray
+        Write-Host '  A restore point is made before any repair.' -ForegroundColor DarkGray
+        Write-Host ''
+        Write-Host '   1. Scan & repair      (scan, then choose what to fix)' -ForegroundColor White
+        Write-Host '   2. Scan only          (diagnose, change nothing)' -ForegroundColor White
+        Write-Host '   3. Auto-fix safe      (apply Safe + Moderate fixes automatically)' -ForegroundColor White
+        Write-Host '   4. Auto-fix all       (include heavy repairs: SFC/DISM/WU/network)' -ForegroundColor White
+        Write-Host '   0. Back' -ForegroundColor White
+        Write-Host ''
+        switch ((Read-Key).Trim()) {
+            '1' { Write-Host ''; & $script:RepairScript;                          Wait-Enter }
+            '2' { Write-Host ''; & $script:RepairScript -ScanOnly;                Wait-Enter }
+            '3' { Write-Host ''; & $script:RepairScript -FixAll;                  Wait-Enter }
+            '4' { Write-Host ''; & $script:RepairScript -FixAll -IncludeHeavy;    Wait-Enter }
+            '0' { return }
+            default { }
+        }
+    }
+}
+
+# =====================================================================
 # MAIN MENU
 # =====================================================================
 function Show-MainMenu {
@@ -268,19 +296,21 @@ function Show-MainMenu {
         Write-Host ''
         Write-Host '   1. Disk cleanup        (detailed - categories, preview, run)' -ForegroundColor White
         Write-Host '   2. Optimize Windows    (performance / privacy / debloat / network)' -ForegroundColor White
-        Write-Host '   3. Full run            (cleanup + optimization)' -ForegroundColor White
-        Write-Host '   4. Undo optimizations  (revert last run from backup)' -ForegroundColor White
-        Write-Host '   5. Create restore point' -ForegroundColor White
-        Write-Host '   6. List tasks & tweaks' -ForegroundColor White
+        Write-Host '   3. Troubleshoot        (scan for problems, then repair)' -ForegroundColor White
+        Write-Host '   4. Full run            (cleanup + optimization)' -ForegroundColor White
+        Write-Host '   5. Undo optimizations  (revert last run from backup)' -ForegroundColor White
+        Write-Host '   6. Create restore point' -ForegroundColor White
+        Write-Host '   7. List tasks, tweaks & checks' -ForegroundColor White
         Write-Host '   0. Exit' -ForegroundColor White
         Write-Host ''
         switch ((Read-Key).Trim()) {
             '1' { Show-CleanupScreen }
             '2' { Show-OptimizeScreen }
-            '3' { Invoke-FullRun }
-            '4' { Write-Banner 'Undo optimizations'; & $script:OptimizeScript -Undo; Wait-Enter }
-            '5' { Write-Banner 'Create restore point'; New-CleanupRestorePoint | Out-Null; Wait-Enter }
-            '6' { Write-Banner 'Tasks & tweaks'; Show-TaskList; Show-TweakList; Wait-Enter }
+            '3' { Show-TroubleshootScreen }
+            '4' { Invoke-FullRun }
+            '5' { Write-Banner 'Undo optimizations'; & $script:OptimizeScript -Undo; Wait-Enter }
+            '6' { Write-Banner 'Create restore point'; New-CleanupRestorePoint | Out-Null; Wait-Enter }
+            '7' { Write-Banner 'Tasks, tweaks & checks'; Show-TaskList; Show-TweakList; Show-CheckList; Wait-Enter }
             '0' { Write-Host ''; Write-Host '  Bye.' -ForegroundColor Cyan; return }
             'q' { return }
             default { }

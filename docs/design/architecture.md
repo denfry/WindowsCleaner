@@ -1,16 +1,17 @@
 # Architecture
 
-The tool is a pair of single-file PowerShell engines driven by declarative registries — one
-for cleanup, one for optimization — plus an interactive menu that ties them together and a
-batch script that mirrors the cleanup defaults for dependency-free environments.
+The tool is three single-file PowerShell engines driven by declarative registries — one for
+cleanup, one for optimization, one for troubleshooting — plus an interactive menu that ties
+them together and a batch script that mirrors the cleanup defaults for dependency-free
+environments.
 
 ## Menu front door
 
-`WinSenior.ps1` is the single entry point. It self-elevates, dot-sources both engines as
+`WinSenior.ps1` is the single entry point. It self-elevates, dot-sources all three engines as
 libraries (their `InvocationName -ne '.'` entry guards keep them from auto-running), and
-presents numbered screens for cleanup, optimization, undo, restore point and listings. It
-executes by invoking each engine as a child call (`& $engine @params`); an exact toggled
-selection is reproduced with `-Include <on>` + `-Exclude <off>`.
+presents numbered screens for cleanup, optimization, troubleshooting, undo, restore point and
+listings. It executes by invoking each engine as a child call (`& $engine @params`); an exact
+toggled selection is reproduced with `-Include <on>` + `-Exclude <off>`.
 
 ## Task registry + engine
 
@@ -69,6 +70,18 @@ Areas: Performance, Privacy, Debloat, Network (29 tweaks; `-ListTweaks` prints t
 It never touches Defender real-time protection, Windows Update, the network stack wholesale, or
 Edge/Store.
 
+## Troubleshooting engine
+`Repair-Windows-Senior.ps1` diagnoses and repairs system health. Each check is one record
+(`Id, Name, Category, Scan, Fix, FixRisk, FixLabel, Reboot`). `Scan` is read-only and returns
+`@{ Status = 'OK'|'Warn'|'Fail'; Detail }`; `Fix` is optional. The flow is scan-then-choose:
+`Invoke-Scan` runs every selected check, `Show-ScanReport` prints the grouped health report,
+then fixable issues (Warn/Fail with a Fix) are offered — interactively, or auto-applied with
+`-FixAll` (Safe+Moderate, plus Aggressive under `-IncludeHeavy`). `Invoke-Fix` applies through
+`ShouldProcess` after a restore point. 13 checks across Integrity, Disk, Update, Network,
+Devices, Services, Security and System. Image health uses `Repair-WindowsImage -CheckHealth`
+(locale-independent `ImageHealthState`) rather than parsing DISM text. Repairs only improve
+health — the engine enables Defender, never disables it.
+
 ## Batch script
 `Cleanup-Windows-Senior.bat` is the dependency-free alternative. It mirrors the engine's
 defaults via a per-profile helper, independent per-browser flags, ordered Windows Update
@@ -76,8 +89,9 @@ service stops, all-local-disk cleanup, a Dangerous tier behind `/IncludeDangerou
 optional real restore point via `/RestorePoint`.
 
 ## Tests
-Pester 5 tests (`tests/`) cover the pure logic of both engines — cleanup selection, the safety
-guard, `<DRIVE>` expansion, age filtering, formatting and `-WhatIf` accounting; plus the tweak
+Pester 5 tests (`tests/`) cover the pure logic of all three engines — cleanup selection, the
+safety guard, `<DRIVE>` expansion, age filtering, formatting and `-WhatIf` accounting; the tweak
 registry integrity, `Resolve-TweakSelection`, and a registry backup→apply→undo round-trip against
-a throwaway `HKCU:\Software\WinSeniorTest` hive. Destructive paths are validated through `-WhatIf`.
-CI runs them on `windows-latest`.
+a throwaway `HKCU:\Software\WinSeniorTest` hive; and the troubleshooter's check-registry integrity,
+selection, and scan/fix dispatch with synthetic checks. Destructive paths are validated through
+`-WhatIf`. CI runs them on `windows-latest`.
