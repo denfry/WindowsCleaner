@@ -15,13 +15,18 @@ jobs:
       - name: Syntax parse check
         shell: pwsh
         run: |
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path ./Cleanup-Windows-Senior.ps1), [ref]$null, [ref]$errors) | Out-Null
-          if ($errors) {
-            $errors | ForEach-Object { Write-Host "::error::L$($_.Extent.StartLineNumber): $($_.Message)" }
-            exit 1
+          $files = './Cleanup-Windows-Senior.ps1','./Optimize-Windows-Senior.ps1','./WinSenior.ps1'
+          $failed = $false
+          foreach ($f in $files) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $f), [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) {
+              $errors | ForEach-Object { Write-Host "::error::$f L$($_.Extent.StartLineNumber): $($_.Message)" }
+              $failed = $true
+            }
           }
+          if ($failed) { exit 1 }
           Write-Host 'Parse OK'
 
       - name: Install Pester & PSScriptAnalyzer
@@ -34,7 +39,8 @@ jobs:
       - name: PSScriptAnalyzer (fail on errors only)
         shell: pwsh
         run: |
-          $r = Invoke-ScriptAnalyzer -Path ./Cleanup-Windows-Senior.ps1 -Severity Error
+          $files = './Cleanup-Windows-Senior.ps1','./Optimize-Windows-Senior.ps1','./WinSenior.ps1'
+          $r = $files | ForEach-Object { Invoke-ScriptAnalyzer -Path $_ -Severity Error }
           if ($r) { $r | Format-Table -AutoSize | Out-String | Write-Host; Write-Error 'ScriptAnalyzer found error-level issues'; exit 1 }
           Write-Host 'No analyzer errors'
 
