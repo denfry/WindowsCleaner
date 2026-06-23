@@ -1,0 +1,18 @@
+# Cleanup tool output
+*.log
+WindowsCleanup.log
+cleanup*.json
+
+# Local tooling / editor
+.claude/
+.vscode/
+.idea/
+
+# Stray caches (e.g. from misfiring test hooks)
+.pytest_cache/
+__pycache__/
+
+# OS cruft
+Thumbs.db
+desktop.ini
+*.tmp

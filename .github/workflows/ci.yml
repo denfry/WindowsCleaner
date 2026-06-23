@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax parse check
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path ./Cleanup-Windows-Senior.ps1), [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) {
+            $errors | ForEach-Object { Write-Host "::error::L$($_.Extent.StartLineNumber): $($_.Message)" }
+            exit 1
+          }
+          Write-Host 'Parse OK'
+
+      - name: Install Pester & PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -MinimumVersion 5.5.0 -Force -SkipPublisherCheck
+          Install-Module PSScriptAnalyzer -Force
+
+      - name: PSScriptAnalyzer (fail on errors only)
+        shell: pwsh
+        run: |
+          $r = Invoke-ScriptAnalyzer -Path ./Cleanup-Windows-Senior.ps1 -Severity Error
+          if ($r) { $r | Format-Table -AutoSize | Out-String | Write-Host; Write-Error 'ScriptAnalyzer found error-level issues'; exit 1 }
+          Write-Host 'No analyzer errors'
+
+      - name: Pester tests
+        shell: pwsh
+        run: |
+          Import-Module Pester -MinimumVersion 5.5.0
+          $cfg = New-PesterConfiguration
+          $cfg.Run.Path = './tests'
+          $cfg.Run.Exit = $true
+          $cfg.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $cfg

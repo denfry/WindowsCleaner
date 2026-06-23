@@ -1,0 +1,12 @@
+# Normalize to LF in the repo; check out platform-appropriate line endings.
+* text=auto
+
+# Windows scripts must stay CRLF on checkout.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Docs/config keep LF.
+*.md   text eol=lf
+*.yml  text eol=lf
+*.json text eol=lf
