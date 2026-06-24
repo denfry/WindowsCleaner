@@ -1,0 +1,83 @@
+name: 🐞 Bug report
+description: Report something that behaves incorrectly
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! For anything that looks like a **security
+        vulnerability**, do not file here — see [SECURITY.md](../blob/main/SECURITY.md).
+  - type: checkboxes
+    id: prechecks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I ran the script **as Administrator**
+          required: true
+        - label: I reproduced this after previewing with `-WhatIf` / `-DryRun`
+          required: false
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Which part?
+      options:
+        - "Cleanup (Cleanup-Windows-Senior.ps1)"
+        - "Optimization (Optimize-Windows-Senior.ps1)"
+        - "Troubleshooting / Repair (Repair-Windows-Senior.ps1)"
+        - "Menu (WinSenior.ps1)"
+        - "Batch version (Cleanup-Windows-Senior.bat)"
+        - "Scheduler / automation"
+        - "Other / not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command you ran
+      description: The full command line, including parameters.
+      render: powershell
+      placeholder: .\Cleanup-Windows-Senior.ps1 -Category Browsers -WhatIf
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What went wrong, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run ...
+        2. Select ...
+        3. See ...
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log / report excerpt
+      description: Relevant lines from the log (`%TEMP%\WindowsCleanup.log`) or a JSON report. Redact anything private.
+      render: text
+    validations:
+      required: false
+  - type: input
+    id: os
+    attributes:
+      label: Windows version
+      description: From `winver` (e.g. Windows 11 23H2, build 22631).
+    validations:
+      required: true
+  - type: input
+    id: psversion
+    attributes:
+      label: PowerShell version
+      description: Output of `$PSVersionTable.PSVersion`.
+    validations:
+      required: true

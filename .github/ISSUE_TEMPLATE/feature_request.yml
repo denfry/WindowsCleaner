@@ -1,0 +1,55 @@
+name: 💡 Feature request
+description: Suggest a new cleanup target, tweak, check, or improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Because the engines are registry-driven, most new targets are a single
+        declarative entry. The more specific the path/setting, the faster this lands.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of addition?
+      options:
+        - "Cleanup target (a path / cache to remove)"
+        - "Optimization tweak (a Windows setting to change)"
+        - "Health check / repair"
+        - "New parameter or behavior"
+        - "Other"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to achieve? What does today's behavior miss?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: For a cleanup target, the exact path(s). For a tweak, the registry key/value or setting. For a check, what to detect.
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Suggested risk tier
+      description: Irreversible work belongs in the Dangerous tier; debatable tweaks default off.
+      options:
+        - "Safe"
+        - "Moderate"
+        - "Aggressive"
+        - "Dangerous (irreversible)"
+        - "Not sure"
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

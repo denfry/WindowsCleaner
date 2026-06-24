@@ -16,6 +16,27 @@ with a real dry-run mode and a hard safety guard. A companion optimization engin
 49 reversible system tweaks, a troubleshooting engine scans for 25 common problems and
 repairs them, and a single menu ties everything together.
 
+A free, open-source **Windows 10 and Windows 11 cleaner, debloater, and optimizer**, written
+in PowerShell — reclaim disk space, remove bloatware, harden privacy and telemetry, tune
+performance, and diagnose common system problems, with a real dry-run and a System Restore
+safety net. Works on desktops, laptops, and Windows Server, and runs unattended for fleets.
+
+## Contents
+
+- [The menu — one command](#one-command--the-menu)
+- [Highlights](#highlights)
+- [Quick start](#quick-start)
+- [Parameters](#parameters)
+- [Risk tiers](#risk-tiers)
+- [What gets cleaned](#what-gets-cleaned)
+- [Optimization](#optimization)
+- [Troubleshooting engine](#troubleshooting)
+- [Batch version](#batch-version)
+- [Automation (GPO / SCCM / Intune)](#automation-gpo--sccm--intune--task-scheduler)
+- [Tests](#tests)
+- [Common issues (FAQ)](#common-issues-faq)
+- [License](#license)
+
 ## One command — the menu
 
 `WinSenior.ps1` is the single entry point. Run it (it self-elevates) and an interactive
@@ -287,7 +308,7 @@ Pester 5+:
 Invoke-Pester -Path .\tests
 ```
 
-## Troubleshooting
+## Common issues (FAQ)
 
 - **"running scripts is disabled"** — `powershell.exe -ExecutionPolicy Bypass -File ...`
   or `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
