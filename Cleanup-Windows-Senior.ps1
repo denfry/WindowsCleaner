@@ -15,7 +15,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.0.0
+    Version : 6.1.0
     Requires: PowerShell 5.1+ (Windows). Administrator rights for most tasks.
 
 .EXAMPLE

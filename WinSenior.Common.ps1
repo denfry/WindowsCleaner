@@ -14,7 +14,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.0.0
+    Version : 6.1.0
 #>
 
 # =====================================================================
@@ -115,7 +115,7 @@ function New-WinSeniorRestorePoint {
 #   DurationSec; engine-specific counters go in Summary, the per-unit list
 #   in Items. No-op without -ReportPath.
 # =====================================================================
-function Get-WinSeniorVersion { '6.0.0' }
+function Get-WinSeniorVersion { '6.1.0' }
 
 function Write-WinSeniorReport {
     param(

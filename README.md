@@ -1,7 +1,7 @@
 # Windows System Cleaner and Optimizer 🧹
 
 [![CI](https://github.com/denfry/WindowsCleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/denfry/WindowsCleaner/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-6.0.0-blue.svg)](https://github.com/denfry/WindowsCleaner)
+[![Version](https://img.shields.io/badge/version-6.1.0-blue.svg)](https://github.com/denfry/WindowsCleaner)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![PowerShell](https://img.shields.io/badge/powershell-5.1%2B%20%7C%207%2B-blue.svg)](https://learn.microsoft.com/powershell/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](https://www.microsoft.com/windows/)
@@ -265,7 +265,7 @@ Every engine's `-ReportPath` writes the same envelope, so one parser reads them 
 
 ```json
 {
-  "Tool": "WinSenior", "Version": "6.0.0", "Engine": "Cleanup",
+  "Tool": "WinSenior", "Version": "6.1.0", "Engine": "Cleanup",
   "Host": "PC01", "Timestamp": "2026-06-24T03:00:11", "Mode": "Live",
   "RestorePoint": true, "DurationSec": 42.3,
   "Summary": { "TotalFreed": "1.20 GB", "TotalFiles": 8123, "TotalErrors": 2 },

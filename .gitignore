@@ -16,3 +16,17 @@ __pycache__/
 Thumbs.db
 desktop.ini
 *.tmp
+
+# codebase-index cache (machine-local; do not commit)
+.claude/cache/codebase-index/
+
+# AI assistant / editor tooling configs (installed per-tool, machine-local - not project files)
+.codex/
+.cursor/
+.opencode/
+.windsurf/
+.zed/
+AGENTS.md
+
+# Release build output
+dist/
