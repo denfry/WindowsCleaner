@@ -38,17 +38,17 @@ Describe 'Write-WsLog' {
 }
 
 Describe 'New-WinSeniorRestorePoint' {
-    BeforeEach {
-        $script:captured = [System.Collections.Generic.List[string]]::new()
-        $script:logger   = { param($m, $l) $script:captured.Add("$l|$m") }.GetNewClosure()
-    }
-
+    # A capturing logger built from a LOCAL variable + GetNewClosure. Using $script:
+    # scope here does NOT survive the closure's module boundary under Pester 5 (the
+    # variable reads back as $null inside the scriptblock), so keep it function-local.
     It 'is a no-op under -WhatIf and never checkpoints' {
         Mock Checkpoint-Computer { }
+        $captured = [System.Collections.Generic.List[string]]::new()
+        $logger = { param($m, $l) $captured.Add("$l|$m") }.GetNewClosure()
         $WhatIfPreference = $true
-        $r = New-WinSeniorRestorePoint -Description 'test' -LogAction $script:logger
+        $r = New-WinSeniorRestorePoint -Description 'test' -LogAction $logger
         $r | Should -Be 'WhatIf'
-        ($script:captured -join "`n") | Should -Match 'would create a System Restore point'
+        ($captured -join "`n") | Should -Match 'would create a System Restore point'
         Should -Invoke Checkpoint-Computer -Times 0 -Exactly
     }
 
@@ -56,21 +56,25 @@ Describe 'New-WinSeniorRestorePoint' {
         Mock New-ItemProperty    { }
         Mock Enable-ComputerRestore { }
         Mock Checkpoint-Computer  { }
+        $captured = [System.Collections.Generic.List[string]]::new()
+        $logger = { param($m, $l) $captured.Add("$l|$m") }.GetNewClosure()
         $WhatIfPreference = $false
-        $r = New-WinSeniorRestorePoint -Description 'test' -LogAction $script:logger
+        $r = New-WinSeniorRestorePoint -Description 'test' -LogAction $logger
         $r | Should -Be 'Created'
         Should -Invoke Checkpoint-Computer -Times 1 -Exactly
-        ($script:captured -join "`n") | Should -Match 'System Restore point created'
+        ($captured -join "`n") | Should -Match 'System Restore point created'
     }
 
     It 'returns Failed when the checkpoint throws' {
         Mock New-ItemProperty    { }
         Mock Enable-ComputerRestore { }
         Mock Checkpoint-Computer  { throw 'protection off' }
+        $captured = [System.Collections.Generic.List[string]]::new()
+        $logger = { param($m, $l) $captured.Add("$l|$m") }.GetNewClosure()
         $WhatIfPreference = $false
-        $r = New-WinSeniorRestorePoint -Description 'test' -LogAction $script:logger
+        $r = New-WinSeniorRestorePoint -Description 'test' -LogAction $logger
         $r | Should -Be 'Failed'
-        ($script:captured -join "`n") | Should -Match 'Restore point not created'
+        ($captured -join "`n") | Should -Match 'Restore point not created'
     }
 }
 
