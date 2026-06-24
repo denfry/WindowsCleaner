@@ -101,6 +101,64 @@ function Get-MenuFrame {
     , $out.ToArray()
 }
 
+function Read-MenuKey {
+    if ([Console]::IsInputRedirected) { return 'Redirected' }
+    $k = [Console]::ReadKey($true)
+    switch ($k.Key) {
+        'UpArrow'    { return 'Up' }
+        'DownArrow'  { return 'Down' }
+        'LeftArrow'  { return 'Left' }
+        'RightArrow' { return 'Right' }
+        'Enter'      { return 'Enter' }
+        'Escape'     { return 'Esc' }
+        'Spacebar'   { return 'Space' }
+        'Home'       { return 'Home' }
+        'End'        { return 'End' }
+        'PageUp'     { return 'PageUp' }
+        'PageDown'   { return 'PageDown' }
+        default {
+            $c = $k.KeyChar
+            if ($c -and -not [char]::IsControl($c)) { return [string]$c }
+            return 'none'
+        }
+    }
+}
+
+function Get-FrameWidth {
+    try { return [Math]::Min(76, [Console]::WindowWidth - 1) } catch { return 76 }
+}
+
+function Write-FrameLine {
+    param($Line, [int]$Width)
+    if ($Line.Left)  { Write-Host $Line.Left -ForegroundColor $script:UiColor.Frame -NoNewline }
+    if ($Line.Highlight) {
+        Write-Host $Line.Text -ForegroundColor $script:UiColor.HighlightFg -BackgroundColor $script:UiColor.HighlightBg -NoNewline
+    } else {
+        Write-Host $Line.Text -ForegroundColor $Line.Fg -NoNewline
+    }
+    if ($Line.Right) { Write-Host $Line.Right -ForegroundColor $script:UiColor.Frame -NoNewline }
+    $used = ("$($Line.Left)$($Line.Text)$($Line.Right)").Length
+    if ($used -lt $Width) { Write-Host (' ' * ($Width - $used)) -NoNewline }
+    Write-Host ''
+}
+
+function Write-Frame {
+    param([object[]]$Lines)
+    $w = try { [Console]::WindowWidth } catch { 80 }
+    # Best-effort: paint in place at the cursor home; if that console op is
+    # unavailable (no real handle / redirected), fall back to Clear-Host, and
+    # if even that fails just stream the lines. The painter must never throw.
+    $placedHome = $false
+    try { [Console]::SetCursorPosition(0, 0); $placedHome = $true } catch { try { Clear-Host } catch { } }
+    foreach ($ln in $Lines) { Write-FrameLine -Line $ln -Width ($w - 1) }
+    if ($placedHome) {
+        $extra = $script:UiLastHeight - $Lines.Count
+        for ($j = 0; $j -lt $extra; $j++) { Write-Host (' ' * ($w - 1)) }
+        try { [Console]::SetCursorPosition(0, $Lines.Count) } catch { }
+    }
+    $script:UiLastHeight = $Lines.Count
+}
+
 function Resolve-ChecklistAction {
     param([string]$Token, [int]$Cursor, [int]$Count, [int]$Page = 10)
     switch ($Token) {

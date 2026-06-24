@@ -136,3 +136,16 @@ Describe 'Get-ChecklistFrame' {
         ($f | Where-Object { $_.Text -match 'Xeq' }).Text | Should -Match '\(applied\)'
     }
 }
+
+Describe 'Read-MenuKey' {
+    It 'returns Redirected when there is no interactive console' {
+        # Pester runs non-interactively, so input is redirected here.
+        Read-MenuKey | Should -Be 'Redirected'
+    }
+}
+
+Describe 'Get-FrameWidth' {
+    It 'returns a positive width' {
+        Get-FrameWidth | Should -BeGreaterThan 0
+    }
+}
