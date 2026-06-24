@@ -432,6 +432,9 @@ function Get-CleanupTaskRegistry {
             '<USER>\go\pkg\mod\cache\download\*',
             '<USER>\AppData\Local\go-build\*',
             '<USER>\AppData\Local\Pub\Cache\*')
+        New-CleanupTask ps-modulecache 'PowerShell module analysis cache' DevTools Safe -Paths @(
+            '<USER>\AppData\Local\Microsoft\Windows\PowerShell\ModuleAnalysisCache',
+            '<USER>\AppData\Local\Microsoft\Windows\PowerShell\StartupProfileData-*')
 
         # ---------------- Apps / messengers (Safe) ----------------
         New-CleanupTask appcache 'Windows app cache' Apps Safe -Paths @(
@@ -466,6 +469,8 @@ function Get-CleanupTaskRegistry {
             '<USER>\AppData\Roaming\Adobe\Common\Media Cache\*',
             '<USER>\AppData\Roaming\Adobe\Common\Media Cache Files\*',
             '<USER>\AppData\Local\Adobe\CameraRaw\Cache\*')
+        New-CleanupTask rdp-cache 'Remote Desktop client bitmap cache' Apps Safe -Paths @(
+            '<USER>\AppData\Local\Microsoft\Terminal Server Client\Cache\*')
 
         # ---------------- Games (launcher caches, Safe) ----------------
         New-CleanupTask game-caches 'Game launcher caches (Steam/Epic/Battle.net/GOG)' Games Safe -Paths @(
@@ -492,7 +497,11 @@ function Get-CleanupTaskRegistry {
             '<USER>\AppData\Local\D3DSCache\*',
             '<USER>\AppData\Local\NVIDIA\DXCache\*',
             '<USER>\AppData\Local\NVIDIA\GLCache\*',
+            '<USER>\AppData\Local\NVIDIA\OptixCache\*',
+            '<USER>\AppData\Local\NVIDIA Corporation\NV_Cache\*',
             '<USER>\AppData\Local\AMD\DxCache\*')
+        New-CleanupTask win-caches 'Windows per-user app caches' System Safe -Paths @(
+            '<USER>\AppData\Local\Microsoft\Windows\Caches\*')
         New-CleanupTask gpu-leftovers 'GPU driver installer leftovers (NVIDIA/AMD)' System Safe -Paths @(
             '<DRIVE>NVIDIA\*',
             '<DRIVE>AMD\*',
@@ -579,6 +588,13 @@ function Get-CleanupTaskRegistry {
             '%WINDIR%\inf\setupapi.dev*.log',
             '%WINDIR%\inf\setupapi.setup*.log',
             '%ProgramData%\Microsoft\Windows Defender\Scans\History\Results\*')
+        New-CleanupTask livekernel 'Live kernel crash dumps (driver/GPU TDR)' Logs Safe -Paths @(
+            '%WINDIR%\LiveKernelReports\*.dmp')
+        New-CleanupTask srum-db 'Network/app usage telemetry DB (SRUM)' Logs Moderate `
+            -StopServices @('DPS') -Paths @('%WINDIR%\System32\sru\*')
+        New-CleanupTask eventtranscript 'Diagnostic telemetry database (EventTranscript)' Logs Moderate `
+            -StopServices @('DiagTrack') -Paths @(
+            '%ProgramData%\Microsoft\Diagnosis\EventTranscript\*')
         New-CleanupTask crashdumps 'Crash & memory dumps' Logs Moderate -Paths @(
             '%WINDIR%\Minidump\*',
             '%WINDIR%\MEMORY.DMP',
@@ -626,6 +642,7 @@ function Get-CleanupTaskRegistry {
                     "$env:SystemDrive\Windows.old",
                     "$env:SystemDrive\`$Windows.~BT",
                     "$env:SystemDrive\`$Windows.~WS",
+                    "$env:SystemDrive\`$WinREAgent",
                     "$env:WINDIR\Downloaded Program Files")) {
                 $r = Remove-ProtectedFolder -FullPath $folder -Description 'upgrade leftovers'
                 if ($r) { $total.Bytes += $r.Bytes; $total.Errors += $r.Errors }

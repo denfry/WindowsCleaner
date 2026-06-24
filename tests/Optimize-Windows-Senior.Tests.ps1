@@ -127,3 +127,26 @@ Describe 'Tweak-level apply / undo (Registry type)' {
         Test-TweakApplied -Tweak $t | Should -BeFalse
     }
 }
+
+Describe 'New coverage additions' {
+    It 'adds the Recall/AI privacy tweak as a registry tweak under WindowsAI' {
+        $t = $script:Reg | Where-Object Id -eq 'priv-recall'
+        $t           | Should -Not -BeNullOrEmpty
+        $t.Type      | Should -Be 'Registry'
+        $t.Spec.Path | Should -Match 'WindowsAI'
+    }
+    It 'adds the classic context-menu tweak as a custom tweak, off by default' {
+        $t = $script:Reg | Where-Object Id -eq 'ux-context-menu'
+        $t.Type      | Should -Be 'Custom'
+        $t.DefaultOn | Should -BeFalse
+    }
+    It 'adds the combined taskbar/Start ad-surface debloat tweak' {
+        $t = $script:Reg | Where-Object Id -eq 'debloat-taskbar-ads'
+        @($t.Spec.Values).Count | Should -BeGreaterThan 3
+    }
+    It 'keeps debatable additions off by default' {
+        foreach ($id in 'priv-clipboard', 'net-teredo', 'perf-faststartup', 'ux-fileext') {
+            ($script:Reg | Where-Object Id -eq $id).DefaultOn | Should -BeFalse
+        }
+    }
+}

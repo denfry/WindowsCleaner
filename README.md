@@ -10,10 +10,10 @@
 > a small engine resolves what to run, reclaims disk space, and deletes through
 > PowerShell's `ShouldProcess` — so **`-WhatIf` is real**, not a parallel code path.
 
-It cleans 57 targets across browsers, developer tools, apps, games, system caches, every
+It cleans 63 targets across browsers, developer tools, apps, games, system caches, every
 local disk, logs, Windows Update, and driver leftovers — all from one declarative registry
 with a real dry-run mode and a hard safety guard. A companion optimization engine applies
-29 reversible system tweaks, a troubleshooting engine scans for 13 common problems and
+49 reversible system tweaks, a troubleshooting engine scans for 25 common problems and
 repairs them, and a single menu ties everything together.
 
 ## One command — the menu
@@ -157,7 +157,9 @@ run. A real restore point is created first as a second safety net.
 .\Optimize-Windows-Senior.ps1 -Undo
 ```
 
-It covers 29 tweaks across four areas:
+It covers 49 tweaks across four areas (including modern Windows 11 items — Recall/Copilot,
+tailored-ads and Spotlight, inking/typing & speech telemetry, and the taskbar/Start ad
+surfaces):
 
 - **Performance** — visual effects to best performance, zero menu/startup delay,
   High-Performance power plan, background apps off; (off by default) Ultimate plan,
@@ -196,7 +198,10 @@ health report, and lets you pick which detected issues to repair. Fixes run thro
 .\Repair-Windows-Senior.ps1 -FixAll -IncludeHeavy -Unattended
 ```
 
-It runs 13 checks across eight categories: system image health (DISM), physical disk SMART
+It runs 25 checks across eight categories — including security checks (firewall state, SMBv1,
+hosts-file and proxy/PAC hijack, Defender signatures), a System Restore safety-net check, print
+spooler / BITS / Store health, and predictive SSD wear & crash-history reporting, plus the
+originals: system image health (DISM), physical disk SMART
 health, low free space, volumes flagged for chkdsk, pending reboot, Windows Update components,
 internet & DNS, devices with driver errors, stopped critical services, Microsoft Defender
 health, WMI repository consistency, time synchronization, and recent critical/error events.

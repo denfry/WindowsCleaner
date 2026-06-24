@@ -240,6 +240,10 @@ function Get-OptimizationTweakRegistry {
             -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' `
             -Values @((RegVal 'GlobalUserDisabled' DWord 1)) `
             -Explain 'Stops UWP apps from running and updating in the background.'
+        New-RegTweak perf-faststartup 'Disable Fast Startup (hybrid boot)' Performance Moderate -DefaultOn $false `
+            -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' `
+            -Values @((RegVal 'HiberbootEnabled' DWord 0)) `
+            -Explain 'Ensures a clean full shutdown (fixes dual-boot clock/filesystem issues). Off by default; slightly slower cold boot.'
         New-CustomTweak perf-power-high 'Power plan: High Performance' Performance Safe -DefaultOn $true `
             -Explain 'Switches the active power plan to High Performance (no CPU down-clocking on idle).' `
             -Test   { $a = (& powercfg /getactivescheme) -join ' '; [bool]($a -match '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c') } `
@@ -319,6 +323,65 @@ function Get-OptimizationTweakRegistry {
                 @{ Path = '\Microsoft\Windows\Feedback\Siuf\'; Name = 'DmClient' },
                 @{ Path = '\Microsoft\Windows\Feedback\Siuf\'; Name = 'DmClientOnScenarioDownload' }) `
             -Explain 'Disables the recurring tasks that collect and send usage/compatibility data.'
+        New-RegTweak priv-recall 'Disable Recall & Click-to-Do (AI screen analysis)' Privacy Safe `
+            -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI' `
+            -Values @((RegVal 'DisableAIDataAnalysis' DWord 1), (RegVal 'DisableClickToDo' DWord 1)) `
+            -Explain 'Blocks Windows Recall snapshots and Click-to-Do AI screen scraping (Win11 24H2+; harmless no-op on older builds).'
+        New-RegTweak priv-copilot 'Disable Windows Copilot' Privacy Safe `
+            -Path 'HKCU:\Software\Policies\Microsoft\Windows\WindowsCopilot' `
+            -Values @((RegVal 'TurnOffWindowsCopilot' DWord 1)) `
+            -Explain 'Turns off the Windows Copilot assistant via user policy.'
+        New-RegTweak priv-tailored 'Disable tailored experiences (ads from diagnostics)' Privacy Safe `
+            -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Privacy' `
+            -Values @((RegVal 'TailoredExperiencesWithDiagnosticDataEnabled' DWord 0)) `
+            -Explain 'Stops Windows from using your diagnostic data to show personalized tips and ads.'
+        New-RegTweak priv-spotlight 'Disable Windows Spotlight features (policy)' Privacy Safe `
+            -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
+            -Values @((RegVal 'DisableWindowsSpotlightFeatures' DWord 1)) `
+            -Explain 'Disables lock-screen/desktop Spotlight ad rotation at the policy root.'
+        New-RegTweak priv-input 'Stop inking & typing personalization' Privacy Safe `
+            -Path 'HKLM:\SOFTWARE\Policies\Microsoft\InputPersonalization' `
+            -Values @(
+                (RegVal 'RestrictImplicitInkCollection' DWord 1),
+                (RegVal 'RestrictImplicitTextCollection' DWord 1),
+                (RegVal 'AllowInputPersonalization' DWord 0)) `
+            -Explain 'Stops sampling of keystrokes/handwriting for personalization. Local dictation still works.'
+        New-RegTweak priv-typing 'Stop sending typing/inking data to Microsoft' Privacy Safe `
+            -Path 'HKCU:\Software\Microsoft\Input\TIPC' `
+            -Values @((RegVal 'Enabled' DWord 0)) `
+            -Explain 'Disables the typing-insights upload channel.'
+        New-RegTweak priv-speech 'Decline online speech recognition' Privacy Safe `
+            -Path 'HKCU:\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy' `
+            -Values @((RegVal 'HasAccepted' DWord 0)) `
+            -Explain 'Opts out of cloud-based voice processing. Offline dictation is unaffected.'
+        New-RegTweak priv-ceip 'Disable Customer Experience Improvement Program' Privacy Safe `
+            -Path 'HKLM:\SOFTWARE\Microsoft\SQMClient\Windows' `
+            -Values @((RegVal 'CEIPEnable' DWord 0)) `
+            -Explain 'Turns off the CEIP master switch (complements the CEIP scheduled-task tweak).'
+        New-RegTweak priv-appcompat 'Disable application-compatibility telemetry' Privacy Moderate `
+            -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppCompat' `
+            -Values @((RegVal 'DisableInventory' DWord 1), (RegVal 'AITEnable' DWord 0)) `
+            -Explain 'Stops the Application Compatibility Appraiser inventory that feeds telemetry.'
+        New-RegTweak priv-wer 'Disable Windows Error Reporting upload' Privacy Moderate `
+            -Path 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting' `
+            -Values @((RegVal 'Disabled' DWord 1)) `
+            -Explain 'Blocks crash-report upload to Microsoft. Local crash logs are still created.'
+        New-RegTweak priv-feedback 'Never ask for Windows feedback' Privacy Safe `
+            -Path 'HKCU:\Software\Microsoft\Siuf\Rules' `
+            -Values @((RegVal 'NumberOfSIUFInPeriod' DWord 0)) `
+            -Explain 'Stops the periodic "rate your experience" feedback prompts.'
+        New-RegTweak priv-deliveryopt 'Disable Delivery Optimization P2P upload' Privacy Moderate `
+            -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' `
+            -Values @((RegVal 'DODownloadMode' DWord 0)) `
+            -Explain 'Stops seeding update payloads to other PCs over the internet (HTTP-only; does not disable Windows Update).'
+        New-RegTweak priv-onedrive 'Block OneDrive network traffic before sign-in' Privacy Safe `
+            -Path 'HKLM:\SOFTWARE\Microsoft\OneDrive' `
+            -Values @((RegVal 'PreventNetworkTrafficPreUserSignIn' DWord 1)) `
+            -Explain 'Stops OneDrive contacting the network before a user signs in. Does not disable OneDrive.'
+        New-RegTweak priv-clipboard 'Disable cloud clipboard sync' Privacy Moderate -DefaultOn $false `
+            -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
+            -Values @((RegVal 'AllowCrossDeviceClipboard' DWord 0)) `
+            -Explain 'Stops clipboard contents syncing to your Microsoft account across devices. Off by default.'
 
         # =============================================================
         # DEBLOAT (UWP apps)
@@ -377,6 +440,32 @@ function Get-OptimizationTweakRegistry {
                 (RegVal 'OemPreInstalledAppsEnabled' DWord 0),
                 (RegVal 'SubscribedContent-338388Enabled' DWord 0)) `
             -Explain 'Stops the Start menu from showing suggested/promoted apps.'
+        New-RegTweak debloat-taskbar-ads 'Hide taskbar/Start/Explorer ad surfaces' Debloat Safe `
+            -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' `
+            -Values @(
+                (RegVal 'TaskbarDa' DWord 0),
+                (RegVal 'TaskbarMn' DWord 0),
+                (RegVal 'Start_IrisRecommendations' DWord 0),
+                (RegVal 'Start_AccountNotifications' DWord 0),
+                (RegVal 'ShowSyncProviderNotifications' DWord 0)) `
+            -Explain 'Hides the Widgets and Chat taskbar buttons, the Start "Recommended"/account-ad rows, and Explorer sync-provider ads.'
+        New-RegTweak debloat-scoobe 'Disable post-update setup nag (SCOOBE)' Debloat Safe `
+            -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement' `
+            -Values @((RegVal 'ScoobeSystemSettingEnabled' DWord 0)) `
+            -Explain 'Stops the "Let''s finish setting up your device" full-screen prompt after updates.'
+        New-RegTweak ux-fileext 'Show file extensions in Explorer' Debloat Safe -DefaultOn $false `
+            -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' `
+            -Values @((RegVal 'HideFileExt' DWord 0)) `
+            -Explain 'Shows known file extensions (security + usability). Off by default (preference).'
+        New-CustomTweak ux-context-menu 'Restore classic Win10 right-click menu' Debloat Safe -DefaultOn $false `
+            -Explain 'Brings back the full Windows 10 context menu on Windows 11. Off by default (preference); needs an Explorer restart.' `
+            -Test   { Test-Path 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32' } `
+            -Backup { @{ Existed = (Test-Path 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32') } } `
+            -Apply  {
+                New-Item -Path 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32' -Force | Out-Null
+                Set-ItemProperty -Path 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32' -Name '(Default)' -Value ''
+            } `
+            -Undo   { param($s) Remove-Item -Path 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}' -Recurse -Force -ErrorAction SilentlyContinue }
 
         # =============================================================
         # NETWORK / GAMES
@@ -397,6 +486,10 @@ function Get-OptimizationTweakRegistry {
             -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' `
             -Values @((RegVal 'NetworkThrottlingIndex' DWord 4294967295), (RegVal 'SystemResponsiveness' DWord 0)) `
             -Explain 'Lifts the 10-packet/ms network throttle and the 20% CPU multimedia reservation (better for gaming/streaming).'
+        New-RegTweak net-teredo 'Disable Teredo IPv6 tunneling' Network Moderate -DefaultOn $false `
+            -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters' `
+            -Values @((RegVal 'DisabledComponents' DWord 1)) `
+            -Explain 'Disables the Teredo transition tunnel (reduces attack surface/latency). Off by default; can affect some P2P/NAT-traversal.'
         New-SvcTweak net-ndu 'Disable Network Data Usage monitor (NDU)' Network Aggressive -DefaultOn $false `
             -Service 'Ndu' -Startup 'Disabled' `
             -Explain 'Stops the NDU driver that can cause high memory use. Off by default; removes per-app data usage stats.'

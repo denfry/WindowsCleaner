@@ -75,3 +75,26 @@ Describe 'Invoke-Scan / Invoke-Fix (synthetic checks)' {
         Invoke-Fix -Check $c -WhatIf | Should -BeFalse
     }
 }
+
+Describe 'New coverage additions' {
+    It 'adds a fixable firewall check' {
+        $c = $script:Reg | Where-Object Id -eq 'firewall-state'
+        $c.Fix     | Should -Not -BeNullOrEmpty
+        $c.FixRisk | Should -Be 'Moderate'
+    }
+    It 'adds report-only disk-reliability and crash-history checks' {
+        foreach ($id in 'disk-reliability', 'crash-history') {
+            ($script:Reg | Where-Object Id -eq $id).Fix | Should -BeNullOrEmpty
+        }
+    }
+    It 'adds the security/network checks (proxy/hosts/smb1/defender-signatures)' {
+        @($script:Reg | Where-Object Id -in 'proxy-hijack', 'hosts-integrity', 'smb1-disabled', 'def-signatures').Count | Should -Be 4
+    }
+    It 'keeps all new fix risks within the allowed tiers' {
+        $new = 'restore-enabled', 'hosts-integrity', 'proxy-hijack', 'firewall-state', 'def-signatures', 'smb1-disabled', 'sched-task-health', 'bits-health', 'spooler-health', 'store-health'
+        foreach ($id in $new) {
+            $c = $script:Reg | Where-Object Id -eq $id
+            if ($c.Fix) { $c.FixRisk | Should -BeIn @('Safe', 'Moderate', 'Aggressive') }
+        }
+    }
+}
