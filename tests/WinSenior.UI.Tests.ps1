@@ -83,3 +83,56 @@ Describe 'Get-MenuFrame' {
         }
     }
 }
+
+Describe 'Resolve-ChecklistAction' {
+    It 'Space toggles the current item' {
+        $a = Resolve-ChecklistAction -Token 'Space' -Cursor 2 -Count 5
+        $a.Action | Should -Be 'toggle'
+        $a.Index  | Should -Be 2
+    }
+    It 'a selects all and n clears all' {
+        (Resolve-ChecklistAction -Token 'a' -Cursor 0 -Count 5).Action | Should -Be 'all'
+        (Resolve-ChecklistAction -Token 'n' -Cursor 0 -Count 5).Action | Should -Be 'none'
+    }
+    It 'Enter is done and Esc is cancel' {
+        (Resolve-ChecklistAction -Token 'Enter' -Cursor 0 -Count 5).Action | Should -Be 'done'
+        (Resolve-ChecklistAction -Token 'Esc'   -Cursor 0 -Count 5).Action | Should -Be 'cancel'
+    }
+    It 'a digit just moves the cursor (selection is via Space)' {
+        $a = Resolve-ChecklistAction -Token '4' -Cursor 0 -Count 5
+        $a.Action | Should -Be 'move'
+        $a.Cursor | Should -Be 3
+    }
+}
+
+Describe 'Get-ChecklistFrame' {
+    BeforeAll {
+        Initialize-UiTheme
+        $script:cItems = @(
+            [pscustomobject]@{ Id = 'a'; Name = 'Alpha'; Group = 'G1'; Risk = 'Safe' }
+            [pscustomobject]@{ Id = 'b'; Name = 'Bravo'; Group = 'G1'; Risk = 'Safe' }
+            [pscustomobject]@{ Id = 'c'; Name = 'Cee';   Group = 'G2'; Risk = 'Dangerous' }
+        )
+        $script:cOn = New-Object 'System.Collections.Generic.HashSet[string]'
+        [void]$script:cOn.Add('a')
+        $script:cFrame = Get-ChecklistFrame -Title 'Pick' -Items $script:cItems -Cursor 0 -OnSet $script:cOn -Width 50
+    }
+    It 'marks selected ids [x] and unselected [ ]' {
+        ($script:cFrame | Where-Object { $_.Text -match 'Alpha' }).Text | Should -Match '\[x\]'
+        ($script:cFrame | Where-Object { $_.Text -match 'Bravo' }).Text | Should -Match '\[ \]'
+    }
+    It 'renders each group header exactly once' {
+        @($script:cFrame | Where-Object { $_.Text -match '^\s*G1\s*$' }).Count | Should -Be 1
+        @($script:cFrame | Where-Object { $_.Text -match '^\s*G2\s*$' }).Count | Should -Be 1
+    }
+    It 'highlights exactly the cursor item' {
+        @($script:cFrame | Where-Object Highlight).Count | Should -Be 1
+        ($script:cFrame | Where-Object Highlight).Text   | Should -Match 'Alpha'
+    }
+    It 'shows the applied suffix when Applied is set' {
+        $items = @([pscustomobject]@{ Id = 'x'; Name = 'Xeq'; Group = 'G'; Risk = 'Safe'; Applied = $true })
+        $on = New-Object 'System.Collections.Generic.HashSet[string]'
+        $f = Get-ChecklistFrame -Title 'P' -Items $items -Cursor 0 -OnSet $on -Width 50
+        ($f | Where-Object { $_.Text -match 'Xeq' }).Text | Should -Match '\(applied\)'
+    }
+}

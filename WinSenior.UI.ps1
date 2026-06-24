@@ -100,3 +100,69 @@ function Get-MenuFrame {
     if ($Footer) { $out.Add([pscustomobject]@{ Left = ''; Text = " $Footer"; Right = ''; Fg = $script:UiColor.Dim; Highlight = $false }) }
     , $out.ToArray()
 }
+
+function Resolve-ChecklistAction {
+    param([string]$Token, [int]$Cursor, [int]$Count, [int]$Page = 10)
+    switch ($Token) {
+        'Up'       { return @{ Cursor = (($Cursor - 1 + $Count) % $Count);   Action = 'move';   Index = $null } }
+        'Down'     { return @{ Cursor = (($Cursor + 1) % $Count);           Action = 'move';   Index = $null } }
+        'Home'     { return @{ Cursor = 0;                                  Action = 'move';   Index = $null } }
+        'End'      { return @{ Cursor = ($Count - 1);                       Action = 'move';   Index = $null } }
+        'PageUp'   { return @{ Cursor = [Math]::Max(0, $Cursor - $Page);    Action = 'move';   Index = $null } }
+        'PageDown' { return @{ Cursor = [Math]::Min($Count - 1, $Cursor + $Page); Action = 'move'; Index = $null } }
+        'Space'    { return @{ Cursor = $Cursor;                            Action = 'toggle'; Index = $Cursor } }
+        'Enter'    { return @{ Cursor = $Cursor;                            Action = 'done';   Index = $null } }
+        'Esc'      { return @{ Cursor = $Cursor;                            Action = 'cancel'; Index = $null } }
+        default {
+            if ($Token -eq 'a' -or $Token -eq 'A') { return @{ Cursor = $Cursor; Action = 'all';  Index = $null } }
+            if ($Token -eq 'n' -or $Token -eq 'N') { return @{ Cursor = $Cursor; Action = 'none'; Index = $null } }
+            if ($Token -match '^[0-9]$') {
+                $d = [int]$Token
+                if ($d -ge 1 -and $d -le $Count) { return @{ Cursor = ($d - 1); Action = 'move'; Index = $null } }
+            }
+            return @{ Cursor = $Cursor; Action = 'none'; Index = $null }
+        }
+    }
+}
+
+function Get-ChecklistFrame {
+    param(
+        [string]$Title,
+        [object[]]$Items,
+        [int]$Cursor,
+        $OnSet,
+        [string[]]$StatusLines = @(),
+        [string]$Footer = '',
+        [int]$Width = 70,
+        [hashtable]$Glyph
+    )
+    if ($Glyph) { $script:UiGlyph = $Glyph }
+    $g = $script:UiGlyph
+    $inner = $Width - 2
+    $rule  = { param($l, $r) [pscustomobject]@{ Left = $l; Text = ($g.H * $inner); Right = $r; Fg = $script:UiColor.Frame; Highlight = $false } }
+    $out = New-Object 'System.Collections.Generic.List[object]'
+    $out.Add((& $rule $g.TL $g.TR))
+    $out.Add((New-UiRow -Text $Title -Fg $script:UiColor.Title -Highlight $false -Inner $inner))
+    foreach ($s in $StatusLines) { $out.Add((New-UiRow -Text $s -Fg $script:UiColor.Dim -Highlight $false -Inner $inner)) }
+    $out.Add((New-UiRow -Text '' -Fg $script:UiColor.Dim -Highlight $false -Inner $inner))
+    $lastGroup = [object]$null
+    for ($i = 0; $i -lt $Items.Count; $i++) {
+        $it = $Items[$i]
+        if ($it.Group -ne $lastGroup) {
+            $out.Add((New-UiRow -Text $it.Group -Fg $script:UiColor.Accent -Highlight $false -Inner $inner))
+            $lastGroup = $it.Group
+        }
+        $box = if ($OnSet.Contains($it.Id)) { '[x]' } else { '[ ]' }
+        $cur = if ($i -eq $Cursor) { $g.Cursor } else { ' ' }
+        $risk = if ($it.Risk) { [string]$it.Risk } else { '' }
+        $suffix = ''
+        if ($null -ne $it.Applied) { $suffix = if ($it.Applied) { '  (applied)' } else { '  (not set)' } }
+        $txt = '{0} {1} {2,-11}{3}{4}' -f $cur, $box, $risk, $it.Name, $suffix
+        $fg = if ($risk -eq 'Dangerous') { $script:UiColor.Danger } else { $script:UiColor.Normal }
+        $out.Add((New-UiRow -Text $txt -Fg $fg -Highlight ($i -eq $Cursor) -Inner $inner))
+    }
+    $out.Add((New-UiRow -Text '' -Fg $script:UiColor.Dim -Highlight $false -Inner $inner))
+    $out.Add((& $rule $g.BL $g.BR))
+    if ($Footer) { $out.Add([pscustomobject]@{ Left = ''; Text = " $Footer"; Right = ''; Fg = $script:UiColor.Dim; Highlight = $false }) }
+    , $out.ToArray()
+}
