@@ -35,28 +35,24 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 # LOCATE ENGINES + ELEVATE
 # =====================================================================
 $script:Root           = $PSScriptRoot
+$script:CommonScript   = Join-Path $script:Root 'WinSenior.Common.ps1'
 $script:CleanupScript  = Join-Path $script:Root 'Cleanup-Windows-Senior.ps1'
 $script:OptimizeScript = Join-Path $script:Root 'Optimize-Windows-Senior.ps1'
 $script:RepairScript   = Join-Path $script:Root 'Repair-Windows-Senior.ps1'
 $script:UiScript       = Join-Path $script:Root 'WinSenior.UI.ps1'
 
-function Test-Admin {
-    try {
-        $id = [Security.Principal.WindowsIdentity]::GetCurrent()
-        (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
-            [Security.Principal.WindowsBuiltInRole]::Administrator)
-    } catch { $false }
-}
-
-foreach ($s in @($script:CleanupScript, $script:OptimizeScript, $script:RepairScript, $script:UiScript)) {
+foreach ($s in @($script:CommonScript, $script:CleanupScript, $script:OptimizeScript, $script:RepairScript, $script:UiScript)) {
     if (-not (Test-Path $s)) {
         Write-Host "Engine not found: $s" -ForegroundColor Red
-        Write-Host 'Keep WinSenior.ps1 next to the two engine scripts.' -ForegroundColor Yellow
+        Write-Host 'Keep WinSenior.ps1 next to the engine scripts and WinSenior.Common.ps1.' -ForegroundColor Yellow
         exit 1
     }
 }
 
-if (-not (Test-Admin)) {
+# Shared helpers (admin check, restore point, logging) - needed before elevation.
+. $script:CommonScript
+
+if (-not (Test-AdminPrivileges)) {
     if ($NoElevate) {
         Write-Host '[!] Not running as Administrator - most actions will fail.' -ForegroundColor Yellow
     }
