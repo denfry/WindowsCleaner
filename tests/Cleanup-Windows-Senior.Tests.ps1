@@ -120,3 +120,15 @@ Describe 'Invoke-PathCleanup (WhatIf accounting)' {
         (Get-ChildItem $script:Tmp).Count | Should -Be $countBefore
     }
 }
+
+Describe 'New coverage additions' {
+    It 'adds the SRUM telemetry DB cleanup with DPS stopped first' {
+        $t = $script:Reg | Where-Object Id -eq 'srum-db'
+        $t           | Should -Not -BeNullOrEmpty
+        $t.Category  | Should -Be 'Logs'
+        $t.StopServices | Should -Contain 'DPS'
+    }
+    It 'adds RDP / PowerShell / app cache and live-kernel dump tasks' {
+        @($script:Reg | Where-Object Id -in 'rdp-cache', 'ps-modulecache', 'win-caches', 'livekernel', 'eventtranscript').Count | Should -Be 5
+    }
+}

@@ -1,7 +1,7 @@
 # Windows System Cleaner and Optimizer 🧹
 
 [![CI](https://github.com/denfry/WindowsCleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/denfry/WindowsCleaner/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-6.0.0-blue.svg)](https://github.com/denfry/WindowsCleaner)
+[![Version](https://img.shields.io/badge/version-6.1.0-blue.svg)](https://github.com/denfry/WindowsCleaner)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![PowerShell](https://img.shields.io/badge/powershell-5.1%2B%20%7C%207%2B-blue.svg)](https://learn.microsoft.com/powershell/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](https://www.microsoft.com/windows/)
@@ -10,10 +10,10 @@
 > a small engine resolves what to run, reclaims disk space, and deletes through
 > PowerShell's `ShouldProcess` — so **`-WhatIf` is real**, not a parallel code path.
 
-It cleans 57 targets across browsers, developer tools, apps, games, system caches, every
+It cleans 63 targets across browsers, developer tools, apps, games, system caches, every
 local disk, logs, Windows Update, and driver leftovers — all from one declarative registry
 with a real dry-run mode and a hard safety guard. A companion optimization engine applies
-29 reversible system tweaks, a troubleshooting engine scans for 13 common problems and
+49 reversible system tweaks, a troubleshooting engine scans for 25 common problems and
 repairs them, and a single menu ties everything together.
 
 ## One command — the menu
@@ -157,7 +157,9 @@ run. A real restore point is created first as a second safety net.
 .\Optimize-Windows-Senior.ps1 -Undo
 ```
 
-It covers 29 tweaks across four areas:
+It covers 49 tweaks across four areas (including modern Windows 11 items — Recall/Copilot,
+tailored-ads and Spotlight, inking/typing & speech telemetry, and the taskbar/Start ad
+surfaces):
 
 - **Performance** — visual effects to best performance, zero menu/startup delay,
   High-Performance power plan, background apps off; (off by default) Ultimate plan,
@@ -196,7 +198,10 @@ health report, and lets you pick which detected issues to repair. Fixes run thro
 .\Repair-Windows-Senior.ps1 -FixAll -IncludeHeavy -Unattended
 ```
 
-It runs 13 checks across eight categories: system image health (DISM), physical disk SMART
+It runs 25 checks across eight categories — including security checks (firewall state, SMBv1,
+hosts-file and proxy/PAC hijack, Defender signatures), a System Restore safety-net check, print
+spooler / BITS / Store health, and predictive SSD wear & crash-history reporting, plus the
+originals: system image health (DISM), physical disk SMART
 health, low free space, volumes flagged for chkdsk, pending reboot, Windows Update components,
 internet & DNS, devices with driver errors, stopped critical services, Microsoft Defender
 health, WMI repository consistency, time synchronization, and recent critical/error events.
@@ -234,6 +239,42 @@ powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden `
 ```
 
 Exit codes: `0` success, `2` administrator privileges required.
+
+### Recurring maintenance — one command
+
+`WinSenior.ps1` can register the recurring tasks for you (run as Administrator;
+it self-elevates):
+
+```powershell
+.\WinSenior.ps1 -InstallSchedule   # register the maintenance tasks
+.\WinSenior.ps1 -RemoveSchedule    # remove them
+```
+
+This creates two Task Scheduler jobs under `\WinSenior\`, running as SYSTEM:
+
+| Task | When | What |
+|------|------|------|
+| **WinSenior Weekly Cleanup** | Weekly, Sun 03:00 | unattended cleanup, no restore point, skips slow SFC/DISM |
+| **WinSenior Monthly Health Scan** | Monthly, 1st 03:30 | read-only health scan (changes nothing) |
+
+Both write JSON reports to `%ProgramData%\WinSenior\reports`.
+
+### Report format
+
+Every engine's `-ReportPath` writes the same envelope, so one parser reads them all:
+
+```json
+{
+  "Tool": "WinSenior", "Version": "6.1.0", "Engine": "Cleanup",
+  "Host": "PC01", "Timestamp": "2026-06-24T03:00:11", "Mode": "Live",
+  "RestorePoint": true, "DurationSec": 42.3,
+  "Summary": { "TotalFreed": "1.20 GB", "TotalFiles": 8123, "TotalErrors": 2 },
+  "Items": [ /* per-task / per-tweak / per-check detail */ ]
+}
+```
+
+`Summary` holds the engine's counters (cleanup: freed bytes/files; optimize:
+applied/skipped; repair: fixed/reboot), and `Items` the per-unit breakdown.
 
 ## Tests
 

@@ -15,7 +15,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.0.0
+    Version : 6.1.0
     Requires: PowerShell 5.1+ (Windows). Administrator rights.
 
 .EXAMPLE
@@ -86,6 +86,11 @@ $script:RestorePointMade = $false
 if ($DryRun) { $WhatIfPreference = $true }
 
 # =====================================================================
+# SHARED LIBRARY (admin / restore-point / logging / format helpers)
+# =====================================================================
+. (Join-Path $PSScriptRoot 'WinSenior.Common.ps1')
+
+# =====================================================================
 # LOGGING / UTIL
 # =====================================================================
 function Write-RepLog {
@@ -94,60 +99,15 @@ function Write-RepLog {
         [ValidateSet('Info','Success','Warning','Error','Debug','Step','WhatIf','Safety')]
         [string]$Level = 'Info'
     )
-    $tag = switch ($Level) {
-        'Success' { '[+]' } 'Warning' { '[!]' } 'Error' { '[x]' }
-        'Step'    { '==>' } 'WhatIf'  { '[~]' } 'Safety' { '[#]' }
-        'Debug'   { '   ' } default   { '[i]' }
-    }
-    $color = switch ($Level) {
-        'Success' { 'Green' } 'Warning' { 'Yellow' } 'Error' { 'Red' }
-        'Step'    { 'Cyan' }  'WhatIf'  { 'Cyan' }   'Safety' { 'Magenta' }
-        'Debug'   { 'DarkGray' } default { 'Gray' }
-    }
-    if ($Level -ne 'Debug' -or $VerbosePreference -ne 'SilentlyContinue') {
-        Write-Host "$tag $Message" -ForegroundColor $color
-    }
-    $stamp = "[{0:yyyy-MM-dd HH:mm:ss}] [{1}] {2}" -f (Get-Date), $Level, $Message
-    try { Add-Content -Path $LogPath -Value $stamp -ErrorAction SilentlyContinue -WhatIf:$false } catch { }
-}
-
-function Format-FileSize {
-    param([long]$Size)
-    if     ($Size -ge 1TB) { '{0:N2} TB' -f ($Size / 1TB) }
-    elseif ($Size -ge 1GB) { '{0:N2} GB' -f ($Size / 1GB) }
-    elseif ($Size -ge 1MB) { '{0:N2} MB' -f ($Size / 1MB) }
-    elseif ($Size -ge 1KB) { '{0:N2} KB' -f ($Size / 1KB) }
-    else                   { "$Size B" }
-}
-
-function Test-WhatIfMode { [bool]$WhatIfPreference }
-
-function Test-AdminPrivileges {
-    try {
-        $id = [Security.Principal.WindowsIdentity]::GetCurrent()
-        (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
-            [Security.Principal.WindowsBuiltInRole]::Administrator)
-    } catch { $false }
+    Write-WsLog -Message $Message -Level $Level -LogPath $LogPath
 }
 
 function New-RepairRestorePoint {
-    if (Test-WhatIfMode) { Write-RepLog '[WhatIf] would create a System Restore point' 'WhatIf'; return $true }
-    Write-RepLog 'Creating System Restore point...' 'Safety'
-    try {
-        $rk = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
-        New-ItemProperty -Path $rk -Name 'SystemRestorePointCreationFrequency' `
-            -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
-        Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction SilentlyContinue
-        Checkpoint-Computer -Description "Before Windows Repair $(Get-Date -Format 'yyyy-MM-dd HH:mm')" `
-            -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop
-        Write-RepLog 'System Restore point created' 'Success'
-        $script:RestorePointMade = $true
-        return $true
-    }
-    catch {
-        Write-RepLog "Restore point not created: $($_.Exception.Message)" 'Warning'
-        return $false
-    }
+    $st = New-WinSeniorRestorePoint `
+        -Description "Before Windows Repair $(Get-Date -Format 'yyyy-MM-dd HH:mm')" `
+        -LogAction { param($m, $l) Write-RepLog $m $l }
+    if ($st -eq 'Created') { $script:RestorePointMade = $true }
+    return ($st -ne 'Failed')
 }
 
 # =====================================================================
@@ -370,6 +330,194 @@ function Get-DiagnosticCheckRegistry {
                 $status = if ($ev.Count -gt 50) { 'Warn' } else { 'OK' }
                 @{ Status = $status; Detail = "$($ev.Count) error/critical event(s) in 48h; top: $top" }
             } -Fix $null
+
+        # ---------------- System / Security additions ----------------
+        New-DiagnosticCheck restore-enabled 'System Restore protection' System `
+            -Scan {
+                $rp = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore' -ErrorAction SilentlyContinue
+                $pts = 0
+                try { $pts = @(Get-CimInstance -Namespace root/default -ClassName SystemRestore -ErrorAction SilentlyContinue).Count } catch { $pts = 0 }
+                if ($rp.DisableSR -eq 1) { @{ Status = 'Warn'; Detail = 'System Restore is disabled (no rollback safety net)' } }
+                elseif ($pts -eq 0)      { @{ Status = 'Warn'; Detail = 'System Restore on but no restore points exist' } }
+                else                     { @{ Status = 'OK';   Detail = "System Restore on; $pts restore point(s)" } }
+            } `
+            -Fix {
+                if (Get-Command Enable-ComputerRestore -ErrorAction SilentlyContinue) {
+                    Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction SilentlyContinue
+                    $rk = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
+                    New-ItemProperty -Path $rk -Name 'SystemRestorePointCreationFrequency' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+                    Checkpoint-Computer -Description 'WinSenior baseline' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction SilentlyContinue
+                } else { Write-RepLog 'Enable-ComputerRestore unavailable (PowerShell 7?) - enable System Protection manually' 'Warning' }
+            } -FixRisk Safe -FixLabel 'Enable System Restore + create a checkpoint'
+
+        New-DiagnosticCheck hosts-integrity 'Hosts file integrity' Network `
+            -Scan {
+                $hosts = "$env:WINDIR\System32\drivers\etc\hosts"
+                if (-not (Test-Path $hosts)) { return @{ Status = 'OK'; Detail = 'No hosts file (default)' } }
+                $lines  = Get-Content $hosts -ErrorAction SilentlyContinue | Where-Object { $_ -and ($_ -notmatch '^\s*#') -and ($_ -match '\S') }
+                $active = @($lines | Where-Object { $_ -notmatch '^\s*(127\.0\.0\.1|::1)\s+localhost\s*$' })
+                $susp   = @($active | Where-Object { $_ -match '(?i)(microsoft|windowsupdate|defender|msftncsi|office|sophos|mcafee|avast|kaspersky)' })
+                if ($susp.Count)        { @{ Status = 'Fail'; Detail = "$($susp.Count) hosts entry(ies) redirect Microsoft/AV/update domains - possible hijack" } }
+                elseif ($active.Count)  { @{ Status = 'Warn'; Detail = "$($active.Count) custom hosts entry(ies) present" } }
+                else                    { @{ Status = 'OK';   Detail = 'Hosts file has no active redirects' } }
+            } `
+            -Fix {
+                $hosts = "$env:WINDIR\System32\drivers\etc\hosts"
+                $bak = "$hosts.winsenior_$(Get-Date -Format 'yyyyMMddHHmmss').bak"
+                Copy-Item $hosts $bak -Force -ErrorAction SilentlyContinue
+                Write-RepLog "Backed up hosts to $bak; writing default header" 'Info'
+                Set-Content -Path $hosts -Value '# Copyright (c) 1993-2009 Microsoft Corp.' -Encoding ASCII -ErrorAction SilentlyContinue
+                & ipconfig.exe /flushdns | Out-Null
+            } -FixRisk Moderate -FixLabel 'Back up & reset hosts to default (then flush DNS)'
+
+        New-DiagnosticCheck proxy-hijack 'Proxy / PAC hijack' Network `
+            -Scan {
+                $is = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+                $p = Get-ItemProperty $is -ErrorAction SilentlyContinue
+                if ($p.AutoConfigURL)                       { @{ Status = 'Fail'; Detail = "AutoConfigURL (PAC) set: $($p.AutoConfigURL)" } }
+                elseif ($p.ProxyEnable -eq 1 -and $p.ProxyServer) { @{ Status = 'Warn'; Detail = "Proxy enabled: $($p.ProxyServer)" } }
+                else                                        { @{ Status = 'OK';   Detail = 'No proxy / PAC configured' } }
+            } `
+            -Fix {
+                $is = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+                Set-ItemProperty $is -Name ProxyEnable -Value 0 -ErrorAction SilentlyContinue
+                Remove-ItemProperty $is -Name ProxyServer -ErrorAction SilentlyContinue
+                Remove-ItemProperty $is -Name AutoConfigURL -ErrorAction SilentlyContinue
+                & netsh.exe winhttp reset proxy *>$null
+            } -FixRisk Moderate -FixLabel 'Reset WinINET/WinHTTP proxy settings'
+
+        New-DiagnosticCheck firewall-state 'Windows Firewall enabled' Security `
+            -Scan {
+                if (-not (Get-Command Get-NetFirewallProfile -ErrorAction SilentlyContinue)) { return @{ Status = 'Skip'; Detail = 'Firewall module unavailable' } }
+                $off = @(Get-NetFirewallProfile -ErrorAction SilentlyContinue | Where-Object { -not $_.Enabled })
+                if ($off.Count -ge 3) { @{ Status = 'Fail'; Detail = 'All firewall profiles are OFF' } }
+                elseif ($off.Count)   { @{ Status = 'Warn'; Detail = ('Firewall off for: ' + (($off.Name) -join ', ')) } }
+                else                  { @{ Status = 'OK';   Detail = 'All firewall profiles enabled' } }
+            } `
+            -Fix { Set-NetFirewallProfile -All -Enabled True -ErrorAction SilentlyContinue } `
+            -FixRisk Moderate -FixLabel 'Re-enable all firewall profiles'
+
+        New-DiagnosticCheck def-signatures 'Defender signatures & threats' Security `
+            -Scan {
+                if (-not (Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue)) { return @{ Status = 'Skip'; Detail = 'Defender module unavailable' } }
+                $s = Get-MpComputerStatus -ErrorAction SilentlyContinue
+                if (-not $s) { return @{ Status = 'Skip'; Detail = 'Defender status unavailable' } }
+                $active = @(Get-MpThreat -ErrorAction SilentlyContinue | Where-Object { $_.ThreatStatusID -in 1, 102, 103, 107 })
+                if ($active.Count)                 { @{ Status = 'Fail'; Detail = "$($active.Count) active/unremediated threat(s)" } }
+                elseif ($s.DefenderSignaturesOutOfDate) { @{ Status = 'Warn'; Detail = 'Defender signatures are out of date' } }
+                else                               { @{ Status = 'OK';   Detail = 'Defender signatures current; no active threats' } }
+            } `
+            -Fix { Write-RepLog 'Updating Defender signatures...' 'Info'; if (Get-Command Update-MpSignature -ErrorAction SilentlyContinue) { Update-MpSignature -ErrorAction SilentlyContinue } } `
+            -FixRisk Safe -FixLabel 'Update Defender signatures'
+
+        New-DiagnosticCheck smb1-disabled 'SMBv1 protocol disabled' Security `
+            -Scan {
+                $srv = (Get-SmbServerConfiguration -ErrorAction SilentlyContinue).EnableSMB1Protocol
+                if ($null -eq $srv) { return @{ Status = 'Skip'; Detail = 'SMB module unavailable' } }
+                if ($srv) { @{ Status = 'Warn'; Detail = 'SMBv1 is ENABLED (EternalBlue/WannaCry vector)' } }
+                else      { @{ Status = 'OK';   Detail = 'SMBv1 disabled' } }
+            } `
+            -Fix {
+                Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force -ErrorAction SilentlyContinue
+                if (Get-Command Disable-WindowsOptionalFeature -ErrorAction SilentlyContinue) {
+                    Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart -ErrorAction SilentlyContinue | Out-Null
+                }
+            } -FixRisk Safe -FixLabel 'Disable SMBv1' -Reboot $true
+
+        New-DiagnosticCheck sched-task-health 'Critical scheduled tasks enabled' System `
+            -Scan {
+                if (-not (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue)) { return @{ Status = 'Skip'; Detail = 'ScheduledTasks module unavailable' } }
+                $want = @(
+                    @{ P = '\Microsoft\Windows\WindowsUpdate\';        N = 'Scheduled Start' },
+                    @{ P = '\Microsoft\Windows\UpdateOrchestrator\';   N = 'Schedule Scan' },
+                    @{ P = '\Microsoft\Windows\SystemRestore\';        N = 'SR' },
+                    @{ P = '\Microsoft\Windows\Windows Defender\';     N = 'Windows Defender Scheduled Scan' })
+                $disabled = foreach ($t in $want) {
+                    $st = Get-ScheduledTask -TaskPath $t.P -TaskName $t.N -ErrorAction SilentlyContinue
+                    if ($st -and $st.State -eq 'Disabled') { $t.N }
+                }
+                $disabled = @($disabled)
+                if ($disabled.Count) { @{ Status = 'Warn'; Detail = ('Critical task(s) disabled: ' + ($disabled -join ', ')) } }
+                else                 { @{ Status = 'OK';   Detail = 'Monitored critical tasks are enabled' } }
+            } `
+            -Fix {
+                $want = @(
+                    @{ P = '\Microsoft\Windows\WindowsUpdate\';        N = 'Scheduled Start' },
+                    @{ P = '\Microsoft\Windows\UpdateOrchestrator\';   N = 'Schedule Scan' },
+                    @{ P = '\Microsoft\Windows\SystemRestore\';        N = 'SR' },
+                    @{ P = '\Microsoft\Windows\Windows Defender\';     N = 'Windows Defender Scheduled Scan' })
+                foreach ($t in $want) {
+                    $st = Get-ScheduledTask -TaskPath $t.P -TaskName $t.N -ErrorAction SilentlyContinue
+                    if ($st -and $st.State -eq 'Disabled') { Enable-ScheduledTask -TaskPath $t.P -TaskName $t.N -ErrorAction SilentlyContinue | Out-Null }
+                }
+            } -FixRisk Moderate -FixLabel 'Re-enable critical scheduled tasks (curated list)'
+
+        New-DiagnosticCheck bits-health 'BITS transfer queue' Update `
+            -Scan {
+                if (-not (Get-Command Get-BitsTransfer -ErrorAction SilentlyContinue)) { return @{ Status = 'Skip'; Detail = 'BITS module unavailable' } }
+                $jobs = @(Get-BitsTransfer -AllUsers -ErrorAction SilentlyContinue)
+                $err  = @($jobs | Where-Object { $_.JobState -in 'Error', 'TransientError' })
+                if ($err.Count)          { @{ Status = 'Warn'; Detail = "$($err.Count) BITS job(s) in error state" } }
+                elseif ($jobs.Count -gt 50) { @{ Status = 'Warn'; Detail = "$($jobs.Count) BITS jobs queued (backlog)" } }
+                else                     { @{ Status = 'OK';   Detail = "$($jobs.Count) BITS job(s); none in error" } }
+            } `
+            -Fix { Get-BitsTransfer -AllUsers -ErrorAction SilentlyContinue | Remove-BitsTransfer -ErrorAction SilentlyContinue } `
+            -FixRisk Moderate -FixLabel 'Clear stuck BITS transfers'
+
+        New-DiagnosticCheck spooler-health 'Print spooler' Services `
+            -Scan {
+                $sp = Get-Service Spooler -ErrorAction SilentlyContinue
+                if (-not $sp) { return @{ Status = 'Skip'; Detail = 'Spooler service not found' } }
+                $printers = @(Get-Printer -ErrorAction SilentlyContinue)
+                if ($printers.Count -eq 0) { return @{ Status = 'OK'; Detail = 'No printers installed' } }
+                $queue = @(Get-ChildItem "$env:WINDIR\System32\spool\PRINTERS" -ErrorAction SilentlyContinue)
+                if ($sp.StartType -ne 'Disabled' -and $sp.Status -ne 'Running') { @{ Status = 'Warn'; Detail = 'Spooler should run but is stopped' } }
+                elseif ($queue.Count -gt 0) { @{ Status = 'Warn'; Detail = "$($queue.Count) file(s) stuck in the print queue" } }
+                else { @{ Status = 'OK'; Detail = 'Spooler running; queue clear' } }
+            } `
+            -Fix {
+                Stop-Service Spooler -Force -ErrorAction SilentlyContinue
+                Get-ChildItem "$env:WINDIR\System32\spool\PRINTERS\*" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+                Start-Service Spooler -ErrorAction SilentlyContinue
+            } -FixRisk Safe -FixLabel 'Clear print queue + restart spooler'
+
+        New-DiagnosticCheck store-health 'Microsoft Store health' System `
+            -Scan {
+                try { $store = Get-AppxPackage -Name Microsoft.WindowsStore -ErrorAction Stop | Select-Object -First 1 }
+                catch { return @{ Status = 'Skip'; Detail = 'Appx module unavailable in this PowerShell host' } }
+                if (-not $store) { return @{ Status = 'Warn'; Detail = 'Microsoft Store package not found for this user' } }
+                if ($store.Status -and $store.Status -ne 'Ok') { @{ Status = 'Warn'; Detail = "Store package status: $($store.Status)" } }
+                else { @{ Status = 'OK'; Detail = "Store $($store.Version) present" } }
+            } `
+            -Fix { Write-RepLog 'Resetting Microsoft Store cache (wsreset)...' 'Info'; & wsreset.exe *>$null } `
+            -FixRisk Safe -FixLabel 'Reset Store cache (wsreset)'
+
+        New-DiagnosticCheck disk-reliability 'SSD wear & temperature' Disk `
+            -Scan {
+                if (-not (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue)) { return @{ Status = 'Skip'; Detail = 'Storage module unavailable' } }
+                $worst = 'OK'; $lines = @()
+                foreach ($pd in (Get-PhysicalDisk -ErrorAction SilentlyContinue)) {
+                    $rc = $pd | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
+                    if (-not $rc) { continue }
+                    $parts = @()
+                    if ($null -ne $rc.Wear)        { $parts += "wear $($rc.Wear)%"; if ($rc.Wear -ge 90) { $worst = 'Fail' } elseif ($rc.Wear -ge 80 -and $worst -ne 'Fail') { $worst = 'Warn' } }
+                    if ($null -ne $rc.Temperature) { $parts += "$($rc.Temperature) C"; if ($rc.Temperature -gt 70) { $worst = 'Fail' } elseif ($rc.Temperature -gt 60 -and $worst -ne 'Fail') { $worst = 'Warn' } }
+                    if ($rc.ReadErrorsUncorrected) { $worst = 'Fail'; $parts += "$($rc.ReadErrorsUncorrected) uncorrected" }
+                    if ($parts.Count) { $lines += ("$($pd.FriendlyName): " + ($parts -join ', ')) }
+                }
+                if ($lines.Count -eq 0) { @{ Status = 'OK'; Detail = 'No reliability counters reported (HDD/USB/older SATA)' } }
+                else                    { @{ Status = $worst; Detail = ($lines -join ' | ') } }
+            } -Fix $null
+
+        New-DiagnosticCheck crash-history 'Recent crashes (BSOD / unexpected shutdown)' System `
+            -Scan {
+                $dumps = @(Get-ChildItem "$env:WINDIR\Minidump\*.dmp" -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-30) })
+                $bug   = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-WER-SystemErrorReporting'; StartTime = (Get-Date).AddDays(-30) } -ErrorAction SilentlyContinue)
+                $n = $dumps.Count + $bug.Count
+                if ($n -eq 0)      { @{ Status = 'OK';   Detail = 'No crash dumps or bugcheck events in 30 days' } }
+                elseif ($n -ge 2)  { @{ Status = 'Warn'; Detail = "$($dumps.Count) minidump(s), $($bug.Count) bugcheck event(s) in 30 days - recurring instability" } }
+                else               { @{ Status = 'OK';   Detail = "$n crash artifact in 30 days (isolated)" } }
+            } -Fix $null
     )
 }
 
@@ -437,19 +585,15 @@ function Show-ScanReport {
 }
 
 function Write-RepReport {
-    if (-not $ReportPath) { return }
-    $report = [pscustomobject]@{
-        Timestamp = (Get-Date).ToString('s')
-        Mode      = if (Test-WhatIfMode) { 'DryRun' } else { 'Live' }
-        Fixed     = $script:Fixed
-        FixErrors = $script:FixErrors
-        Reboot    = $script:RebootNeeded
-        Results   = $script:Results
-    }
-    try {
-        $report | ConvertTo-Json -Depth 6 | Set-Content -Path $ReportPath -Encoding UTF8 -WhatIf:$false
-        Write-RepLog "JSON report written: $ReportPath" 'Info'
-    } catch { Write-RepLog "Could not write report: $($_.Exception.Message)" 'Warning' }
+    Write-WinSeniorReport -ReportPath $ReportPath -Engine 'Repair' `
+        -RestorePoint $script:RestorePointMade -StartTime $script:StartTime `
+        -Summary @{
+            Fixed     = $script:Fixed
+            FixErrors = $script:FixErrors
+            Reboot    = $script:RebootNeeded
+        } `
+        -Items $script:Results `
+        -LogAction { param($m, $l) Write-RepLog $m $l }
 }
 
 # =====================================================================

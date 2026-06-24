@@ -15,7 +15,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.0.0
+    Version : 6.1.0
     Requires: PowerShell 5.1+ (Windows). Administrator rights for most tasks.
 
 .EXAMPLE
@@ -121,6 +121,11 @@ $script:DenyList = @(
 ) | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\').ToLowerInvariant() }
 
 # =====================================================================
+# SHARED LIBRARY (admin / restore-point / logging / format helpers)
+# =====================================================================
+. (Join-Path $PSScriptRoot 'WinSenior.Common.ps1')
+
+# =====================================================================
 # LOGGING
 # =====================================================================
 function Write-CleanupLog {
@@ -129,39 +134,12 @@ function Write-CleanupLog {
         [ValidateSet('Info','Success','Warning','Error','Debug','Step','WhatIf','Safety')]
         [string]$Level = 'Info'
     )
-    $tag = switch ($Level) {
-        'Success' { '[+]' } 'Warning' { '[!]' } 'Error' { '[x]' }
-        'Step'    { '==>' } 'WhatIf'  { '[~]' } 'Safety' { '[#]' }
-        'Debug'   { '   ' } default   { '[i]' }
-    }
-    $color = switch ($Level) {
-        'Success' { 'Green' } 'Warning' { 'Yellow' } 'Error' { 'Red' }
-        'Step'    { 'Cyan' }  'WhatIf'  { 'Cyan' }   'Safety' { 'Magenta' }
-        'Debug'   { 'DarkGray' } default { 'Gray' }
-    }
-    $line = "$tag $Message"
-    if ($Level -ne 'Debug' -or $VerbosePreference -ne 'SilentlyContinue') {
-        Write-Host $line -ForegroundColor $color
-    }
-    $stamp = "[{0:yyyy-MM-dd HH:mm:ss}] [{1}] {2}" -f (Get-Date), $Level, $Message
-    # Logging is infrastructure, not a cleanup action: never let -WhatIf suppress it.
-    try { Add-Content -Path $LogPath -Value $stamp -ErrorAction SilentlyContinue -WhatIf:$false } catch { }
+    Write-WsLog -Message $Message -Level $Level -LogPath $LogPath
 }
 
 # =====================================================================
 # UTILITIES
 # =====================================================================
-function Format-FileSize {
-    param([long]$Size)
-    if     ($Size -ge 1TB) { '{0:N2} TB' -f ($Size / 1TB) }
-    elseif ($Size -ge 1GB) { '{0:N2} GB' -f ($Size / 1GB) }
-    elseif ($Size -ge 1MB) { '{0:N2} MB' -f ($Size / 1MB) }
-    elseif ($Size -ge 1KB) { '{0:N2} KB' -f ($Size / 1KB) }
-    else                   { "$Size B" }
-}
-
-function Test-WhatIfMode { [bool]$WhatIfPreference }
-
 function Get-ItemSize {
     param([System.IO.FileSystemInfo]$Item)
     if ($Item.PSIsContainer) {
@@ -344,36 +322,12 @@ function Remove-ProtectedFolder {
 # =====================================================================
 # SAFETY / ENVIRONMENT
 # =====================================================================
-function Test-AdminPrivileges {
-    try {
-        $id = [Security.Principal.WindowsIdentity]::GetCurrent()
-        (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
-            [Security.Principal.WindowsBuiltInRole]::Administrator)
-    } catch { $false }
-}
-
 function New-CleanupRestorePoint {
-    if (Test-WhatIfMode) {
-        Write-CleanupLog '[WhatIf] would create a System Restore point' 'WhatIf'
-        return $true
-    }
-    Write-CleanupLog 'Creating System Restore point...' 'Safety'
-    try {
-        $rk = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
-        New-ItemProperty -Path $rk -Name 'SystemRestorePointCreationFrequency' `
-            -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
-        Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction SilentlyContinue
-        Checkpoint-Computer -Description "Before Windows Cleanup $(Get-Date -Format 'yyyy-MM-dd HH:mm')" `
-            -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop
-        Write-CleanupLog 'System Restore point created' 'Success'
-        $script:RestorePointMade = $true
-        return $true
-    }
-    catch {
-        Write-CleanupLog "Restore point not created: $($_.Exception.Message)" 'Warning'
-        Write-CleanupLog 'Continuing without a restore point (System Protection may be off).' 'Warning'
-        return $false
-    }
+    $st = New-WinSeniorRestorePoint `
+        -Description "Before Windows Cleanup $(Get-Date -Format 'yyyy-MM-dd HH:mm')" `
+        -LogAction { param($m, $l) Write-CleanupLog $m $l }
+    if ($st -eq 'Created') { $script:RestorePointMade = $true }
+    return ($st -ne 'Failed')
 }
 
 function Stop-BrowserProcesses {
@@ -478,6 +432,9 @@ function Get-CleanupTaskRegistry {
             '<USER>\go\pkg\mod\cache\download\*',
             '<USER>\AppData\Local\go-build\*',
             '<USER>\AppData\Local\Pub\Cache\*')
+        New-CleanupTask ps-modulecache 'PowerShell module analysis cache' DevTools Safe -Paths @(
+            '<USER>\AppData\Local\Microsoft\Windows\PowerShell\ModuleAnalysisCache',
+            '<USER>\AppData\Local\Microsoft\Windows\PowerShell\StartupProfileData-*')
 
         # ---------------- Apps / messengers (Safe) ----------------
         New-CleanupTask appcache 'Windows app cache' Apps Safe -Paths @(
@@ -512,6 +469,8 @@ function Get-CleanupTaskRegistry {
             '<USER>\AppData\Roaming\Adobe\Common\Media Cache\*',
             '<USER>\AppData\Roaming\Adobe\Common\Media Cache Files\*',
             '<USER>\AppData\Local\Adobe\CameraRaw\Cache\*')
+        New-CleanupTask rdp-cache 'Remote Desktop client bitmap cache' Apps Safe -Paths @(
+            '<USER>\AppData\Local\Microsoft\Terminal Server Client\Cache\*')
 
         # ---------------- Games (launcher caches, Safe) ----------------
         New-CleanupTask game-caches 'Game launcher caches (Steam/Epic/Battle.net/GOG)' Games Safe -Paths @(
@@ -538,7 +497,11 @@ function Get-CleanupTaskRegistry {
             '<USER>\AppData\Local\D3DSCache\*',
             '<USER>\AppData\Local\NVIDIA\DXCache\*',
             '<USER>\AppData\Local\NVIDIA\GLCache\*',
+            '<USER>\AppData\Local\NVIDIA\OptixCache\*',
+            '<USER>\AppData\Local\NVIDIA Corporation\NV_Cache\*',
             '<USER>\AppData\Local\AMD\DxCache\*')
+        New-CleanupTask win-caches 'Windows per-user app caches' System Safe -Paths @(
+            '<USER>\AppData\Local\Microsoft\Windows\Caches\*')
         New-CleanupTask gpu-leftovers 'GPU driver installer leftovers (NVIDIA/AMD)' System Safe -Paths @(
             '<DRIVE>NVIDIA\*',
             '<DRIVE>AMD\*',
@@ -625,6 +588,13 @@ function Get-CleanupTaskRegistry {
             '%WINDIR%\inf\setupapi.dev*.log',
             '%WINDIR%\inf\setupapi.setup*.log',
             '%ProgramData%\Microsoft\Windows Defender\Scans\History\Results\*')
+        New-CleanupTask livekernel 'Live kernel crash dumps (driver/GPU TDR)' Logs Safe -Paths @(
+            '%WINDIR%\LiveKernelReports\*.dmp')
+        New-CleanupTask srum-db 'Network/app usage telemetry DB (SRUM)' Logs Moderate `
+            -StopServices @('DPS') -Paths @('%WINDIR%\System32\sru\*')
+        New-CleanupTask eventtranscript 'Diagnostic telemetry database (EventTranscript)' Logs Moderate `
+            -StopServices @('DiagTrack') -Paths @(
+            '%ProgramData%\Microsoft\Diagnosis\EventTranscript\*')
         New-CleanupTask crashdumps 'Crash & memory dumps' Logs Moderate -Paths @(
             '%WINDIR%\Minidump\*',
             '%WINDIR%\MEMORY.DMP',
@@ -672,6 +642,7 @@ function Get-CleanupTaskRegistry {
                     "$env:SystemDrive\Windows.old",
                     "$env:SystemDrive\`$Windows.~BT",
                     "$env:SystemDrive\`$Windows.~WS",
+                    "$env:SystemDrive\`$WinREAgent",
                     "$env:WINDIR\Downloaded Program Files")) {
                 $r = Remove-ProtectedFolder -FullPath $folder -Description 'upgrade leftovers'
                 if ($r) { $total.Bytes += $r.Bytes; $total.Errors += $r.Errors }
@@ -806,22 +777,16 @@ function Show-CleanupSummary {
 }
 
 function Write-CleanupReport {
-    if (-not $ReportPath) { return }
-    $report = [pscustomobject]@{
-        Timestamp      = (Get-Date).ToString('s')
-        Mode           = if (Test-WhatIfMode) { 'DryRun' } else { 'Live' }
-        RestorePoint   = $script:RestorePointMade
-        TotalBytes     = $script:TotalBytes
-        TotalFreed     = (Format-FileSize $script:TotalBytes)
-        TotalFiles     = $script:TotalFiles
-        TotalErrors    = $script:TotalErrors
-        DurationSec    = [math]::Round(((Get-Date) - $script:StartTime).TotalSeconds, 1)
-        Tasks          = $script:Stats
-    }
-    try {
-        $report | ConvertTo-Json -Depth 5 | Set-Content -Path $ReportPath -Encoding UTF8 -WhatIf:$false
-        Write-CleanupLog "JSON report written: $ReportPath" 'Info'
-    } catch { Write-CleanupLog "Could not write report: $($_.Exception.Message)" 'Warning' }
+    Write-WinSeniorReport -ReportPath $ReportPath -Engine 'Cleanup' `
+        -RestorePoint $script:RestorePointMade -StartTime $script:StartTime `
+        -Summary @{
+            TotalBytes  = $script:TotalBytes
+            TotalFreed  = (Format-FileSize $script:TotalBytes)
+            TotalFiles  = $script:TotalFiles
+            TotalErrors = $script:TotalErrors
+        } `
+        -Items $script:Stats `
+        -LogAction { param($m, $l) Write-CleanupLog $m $l }
 }
 
 # =====================================================================
