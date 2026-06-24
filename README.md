@@ -23,8 +23,14 @@ menu opens with detailed screens for cleanup, optimization, troubleshooting, und
 restore point and a task/tweak/check listing. It drives all three engines, so every action
 keeps real `-WhatIf`, the safety guard and per-tweak undo.
 
+The menu is **arrow-key driven**: <kbd>↑</kbd>/<kbd>↓</kbd> move the highlight,
+<kbd>Enter</kbd> selects, <kbd>Space</kbd> toggles a task/tweak on the detailed screens,
+and <kbd>Esc</kbd> goes back. Add `-Plain` for terminals that can't render box-drawing
+characters (ASCII `+ - |` borders instead).
+
 ```powershell
 .\WinSenior.ps1
+.\WinSenior.ps1 -Plain   # ASCII-only borders
 ```
 
 ## Highlights
