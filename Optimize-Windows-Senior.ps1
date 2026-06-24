@@ -703,22 +703,16 @@ function Show-OptSummary {
 
 function Write-OptReport {
     param([string]$ManifestFile)
-    if (-not $ReportPath) { return }
-    $report = [pscustomobject]@{
-        Timestamp    = (Get-Date).ToString('s')
-        Mode         = if (Test-WhatIfMode) { 'DryRun' } else { 'Live' }
-        RestorePoint = $script:RestorePointMade
-        Applied      = $script:Applied
-        Skipped      = $script:Skipped
-        Errors       = $script:Errors
-        Manifest     = $ManifestFile
-        DurationSec  = [math]::Round(((Get-Date) - $script:StartTime).TotalSeconds, 1)
-        Tweaks       = $script:Stats
-    }
-    try {
-        $report | ConvertTo-Json -Depth 6 | Set-Content -Path $ReportPath -Encoding UTF8 -WhatIf:$false
-        Write-OptLog "JSON report written: $ReportPath" 'Info'
-    } catch { Write-OptLog "Could not write report: $($_.Exception.Message)" 'Warning' }
+    Write-WinSeniorReport -ReportPath $ReportPath -Engine 'Optimize' `
+        -RestorePoint $script:RestorePointMade -StartTime $script:StartTime `
+        -Summary @{
+            Applied  = $script:Applied
+            Skipped  = $script:Skipped
+            Errors   = $script:Errors
+            Manifest = $ManifestFile
+        } `
+        -Items $script:Stats `
+        -LogAction { param($m, $l) Write-OptLog $m $l }
 }
 
 # =====================================================================

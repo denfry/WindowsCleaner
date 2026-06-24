@@ -760,22 +760,16 @@ function Show-CleanupSummary {
 }
 
 function Write-CleanupReport {
-    if (-not $ReportPath) { return }
-    $report = [pscustomobject]@{
-        Timestamp      = (Get-Date).ToString('s')
-        Mode           = if (Test-WhatIfMode) { 'DryRun' } else { 'Live' }
-        RestorePoint   = $script:RestorePointMade
-        TotalBytes     = $script:TotalBytes
-        TotalFreed     = (Format-FileSize $script:TotalBytes)
-        TotalFiles     = $script:TotalFiles
-        TotalErrors    = $script:TotalErrors
-        DurationSec    = [math]::Round(((Get-Date) - $script:StartTime).TotalSeconds, 1)
-        Tasks          = $script:Stats
-    }
-    try {
-        $report | ConvertTo-Json -Depth 5 | Set-Content -Path $ReportPath -Encoding UTF8 -WhatIf:$false
-        Write-CleanupLog "JSON report written: $ReportPath" 'Info'
-    } catch { Write-CleanupLog "Could not write report: $($_.Exception.Message)" 'Warning' }
+    Write-WinSeniorReport -ReportPath $ReportPath -Engine 'Cleanup' `
+        -RestorePoint $script:RestorePointMade -StartTime $script:StartTime `
+        -Summary @{
+            TotalBytes  = $script:TotalBytes
+            TotalFreed  = (Format-FileSize $script:TotalBytes)
+            TotalFiles  = $script:TotalFiles
+            TotalErrors = $script:TotalErrors
+        } `
+        -Items $script:Stats `
+        -LogAction { param($m, $l) Write-CleanupLog $m $l }
 }
 
 # =====================================================================

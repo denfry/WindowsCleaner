@@ -26,7 +26,11 @@ param(
     # Do not try to relaunch elevated; run with whatever rights we have.
     [switch]$NoElevate,
     # Force ASCII-only glyphs (for terminals that can't render box-drawing chars).
-    [switch]$Plain
+    [switch]$Plain,
+    # Register the recurring maintenance scheduled tasks, then exit.
+    [switch]$InstallSchedule,
+    # Remove the recurring maintenance scheduled tasks, then exit.
+    [switch]$RemoveSchedule
 )
 
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
@@ -40,8 +44,9 @@ $script:CleanupScript  = Join-Path $script:Root 'Cleanup-Windows-Senior.ps1'
 $script:OptimizeScript = Join-Path $script:Root 'Optimize-Windows-Senior.ps1'
 $script:RepairScript   = Join-Path $script:Root 'Repair-Windows-Senior.ps1'
 $script:UiScript       = Join-Path $script:Root 'WinSenior.UI.ps1'
+$script:ScheduleScript = Join-Path $script:Root 'WinSenior.Schedule.ps1'
 
-foreach ($s in @($script:CommonScript, $script:CleanupScript, $script:OptimizeScript, $script:RepairScript, $script:UiScript)) {
+foreach ($s in @($script:CommonScript, $script:CleanupScript, $script:OptimizeScript, $script:RepairScript, $script:UiScript, $script:ScheduleScript)) {
     if (-not (Test-Path $s)) {
         Write-Host "Engine not found: $s" -ForegroundColor Red
         Write-Host 'Keep WinSenior.ps1 next to the engine scripts and WinSenior.Common.ps1.' -ForegroundColor Yellow
@@ -77,6 +82,21 @@ if (-not (Test-AdminPrivileges)) {
 # Load the TUI primitives and build the glyph/color theme.
 . $script:UiScript
 Initialize-UiTheme -Plain:$Plain
+
+# Load the scheduled-task installer library.
+. $script:ScheduleScript
+
+# Schedule management is a fire-and-exit action, taken before the interactive menu.
+if ($InstallSchedule) {
+    Install-WinSeniorSchedule -Root $script:Root `
+        -LogAction { param($m, $l) Write-WsLog -Message $m -Level $l } | Out-Null
+    exit 0
+}
+if ($RemoveSchedule) {
+    Remove-WinSeniorSchedule -Root $script:Root `
+        -LogAction { param($m, $l) Write-WsLog -Message $m -Level $l } | Out-Null
+    exit 0
+}
 
 # =====================================================================
 # SELECTION STATE

@@ -73,3 +73,30 @@ Describe 'New-WinSeniorRestorePoint' {
         ($script:captured -join "`n") | Should -Match 'Restore point not created'
     }
 }
+
+Describe 'Write-WinSeniorReport' {
+    It 'is a no-op without -ReportPath' {
+        { Write-WinSeniorReport -Engine 'Cleanup' -Summary @{} } | Should -Not -Throw
+    }
+    It 'writes a unified envelope that round-trips' {
+        $tmp = Join-Path $env:TEMP ("wsrep_{0}.json" -f [guid]::NewGuid().ToString('N'))
+        $start = (Get-Date).AddSeconds(-5)
+        Write-WinSeniorReport -ReportPath $tmp -Engine 'Cleanup' `
+            -RestorePoint $true -StartTime $start `
+            -Summary @{ TotalFiles = 7; TotalBytes = 1024 } `
+            -Items @([pscustomobject]@{ Id = 'a' })
+        $tmp | Should -Exist
+        $obj = Get-Content $tmp -Raw | ConvertFrom-Json
+        $obj.Tool               | Should -Be 'WinSenior'
+        $obj.Engine             | Should -Be 'Cleanup'
+        $obj.Version            | Should -Be (Get-WinSeniorVersion)
+        $obj.RestorePoint       | Should -BeTrue
+        $obj.DurationSec        | Should -BeGreaterThan 0
+        $obj.Summary.TotalFiles | Should -Be 7
+        @($obj.Items).Count     | Should -Be 1
+        Remove-Item $tmp -ErrorAction SilentlyContinue
+    }
+    It 'rejects an unknown engine' {
+        { Write-WinSeniorReport -ReportPath 'x' -Engine 'Bogus' } | Should -Throw
+    }
+}

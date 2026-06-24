@@ -107,3 +107,47 @@ function New-WinSeniorRestorePoint {
         return 'Failed'
     }
 }
+
+# =====================================================================
+# REPORTING
+#   One envelope for every engine so a parser reads them all the same.
+#   Common top level: Tool/Version/Engine/Host/Timestamp/Mode/RestorePoint/
+#   DurationSec; engine-specific counters go in Summary, the per-unit list
+#   in Items. No-op without -ReportPath.
+# =====================================================================
+function Get-WinSeniorVersion { '6.0.0' }
+
+function Write-WinSeniorReport {
+    param(
+        [string]$ReportPath,
+        [Parameter(Mandatory)][ValidateSet('Cleanup', 'Optimize', 'Repair')][string]$Engine,
+        [hashtable]$Summary = @{},
+        $Items = @(),
+        [bool]$RestorePoint,
+        [datetime]$StartTime,
+        [scriptblock]$LogAction
+    )
+    if (-not $ReportPath) { return }
+    # Normalise to a flat array. Note: @() throws "Argument types do not match"
+    # on a Generic.List[object] (which is exactly what the engines pass), so cast.
+    $itemArr = if ($null -eq $Items) { @() } else { [object[]]$Items }
+    $report = [ordered]@{
+        Tool         = 'WinSenior'
+        Version      = (Get-WinSeniorVersion)
+        Engine       = $Engine
+        Host         = $env:COMPUTERNAME
+        Timestamp    = (Get-Date).ToString('s')
+        Mode         = if (Test-WhatIfMode) { 'DryRun' } else { 'Live' }
+        RestorePoint = [bool]$RestorePoint
+        DurationSec  = if ($StartTime) { [math]::Round(((Get-Date) - $StartTime).TotalSeconds, 1) } else { $null }
+        Summary      = $Summary
+        Items        = $itemArr
+    }
+    try {
+        ($report | ConvertTo-Json -Depth 6) | Set-Content -Path $ReportPath -Encoding UTF8 -WhatIf:$false
+        if ($LogAction) { & $LogAction "JSON report written: $ReportPath" 'Info' }
+    }
+    catch {
+        if ($LogAction) { & $LogAction "Could not write report: $($_.Exception.Message)" 'Warning' }
+    }
+}

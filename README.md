@@ -235,6 +235,42 @@ powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden `
 
 Exit codes: `0` success, `2` administrator privileges required.
 
+### Recurring maintenance — one command
+
+`WinSenior.ps1` can register the recurring tasks for you (run as Administrator;
+it self-elevates):
+
+```powershell
+.\WinSenior.ps1 -InstallSchedule   # register the maintenance tasks
+.\WinSenior.ps1 -RemoveSchedule    # remove them
+```
+
+This creates two Task Scheduler jobs under `\WinSenior\`, running as SYSTEM:
+
+| Task | When | What |
+|------|------|------|
+| **WinSenior Weekly Cleanup** | Weekly, Sun 03:00 | unattended cleanup, no restore point, skips slow SFC/DISM |
+| **WinSenior Monthly Health Scan** | Monthly, 1st 03:30 | read-only health scan (changes nothing) |
+
+Both write JSON reports to `%ProgramData%\WinSenior\reports`.
+
+### Report format
+
+Every engine's `-ReportPath` writes the same envelope, so one parser reads them all:
+
+```json
+{
+  "Tool": "WinSenior", "Version": "6.0.0", "Engine": "Cleanup",
+  "Host": "PC01", "Timestamp": "2026-06-24T03:00:11", "Mode": "Live",
+  "RestorePoint": true, "DurationSec": 42.3,
+  "Summary": { "TotalFreed": "1.20 GB", "TotalFiles": 8123, "TotalErrors": 2 },
+  "Items": [ /* per-task / per-tweak / per-check detail */ ]
+}
+```
+
+`Summary` holds the engine's counters (cleanup: freed bytes/files; optimize:
+applied/skipped; repair: fixed/reboot), and `Items` the per-unit breakdown.
+
 ## Tests
 
 The `tests\*.Tests.ps1` files cover the pure logic of all three engines — selection, the

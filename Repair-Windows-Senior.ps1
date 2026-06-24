@@ -397,19 +397,15 @@ function Show-ScanReport {
 }
 
 function Write-RepReport {
-    if (-not $ReportPath) { return }
-    $report = [pscustomobject]@{
-        Timestamp = (Get-Date).ToString('s')
-        Mode      = if (Test-WhatIfMode) { 'DryRun' } else { 'Live' }
-        Fixed     = $script:Fixed
-        FixErrors = $script:FixErrors
-        Reboot    = $script:RebootNeeded
-        Results   = $script:Results
-    }
-    try {
-        $report | ConvertTo-Json -Depth 6 | Set-Content -Path $ReportPath -Encoding UTF8 -WhatIf:$false
-        Write-RepLog "JSON report written: $ReportPath" 'Info'
-    } catch { Write-RepLog "Could not write report: $($_.Exception.Message)" 'Warning' }
+    Write-WinSeniorReport -ReportPath $ReportPath -Engine 'Repair' `
+        -RestorePoint $script:RestorePointMade -StartTime $script:StartTime `
+        -Summary @{
+            Fixed     = $script:Fixed
+            FixErrors = $script:FixErrors
+            Reboot    = $script:RebootNeeded
+        } `
+        -Items $script:Results `
+        -LogAction { param($m, $l) Write-RepLog $m $l }
 }
 
 # =====================================================================
