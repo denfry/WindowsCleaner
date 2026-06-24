@@ -40,3 +40,63 @@ function Initialize-UiTheme {
     }
     $script:UiLastHeight = 0
 }
+
+function Resolve-MenuAction {
+    param([string]$Token, [int]$Cursor, [int]$Count)
+    switch ($Token) {
+        'Up'    { return @{ Cursor = (($Cursor - 1 + $Count) % $Count); Result = 'move';   Index = $null } }
+        'Down'  { return @{ Cursor = (($Cursor + 1) % $Count);         Result = 'move';   Index = $null } }
+        'Home'  { return @{ Cursor = 0;                                Result = 'move';   Index = $null } }
+        'End'   { return @{ Cursor = ($Count - 1);                     Result = 'move';   Index = $null } }
+        'Enter' { return @{ Cursor = $Cursor;                          Result = 'select'; Index = $Cursor } }
+        'Esc'   { return @{ Cursor = $Cursor;                          Result = 'back';   Index = $null } }
+        'q'     { return @{ Cursor = $Cursor;                          Result = 'back';   Index = $null } }
+        default {
+            if ($Token -match '^[0-9]$') {
+                $d = [int]$Token
+                if ($d -eq 0) { return @{ Cursor = $Cursor; Result = 'back'; Index = $null } }
+                if ($d -ge 1 -and $d -le $Count) { return @{ Cursor = ($d - 1); Result = 'select'; Index = ($d - 1) } }
+            }
+            return @{ Cursor = $Cursor; Result = 'none'; Index = $null }
+        }
+    }
+}
+
+# Internal: one bordered content row, padded/truncated to the inner width.
+function New-UiRow {
+    param([string]$Text, [string]$Fg, [bool]$Highlight, [int]$Inner)
+    $body = (' ' + $Text)
+    if ($body.Length -lt $Inner) { $body = $body.PadRight($Inner) } else { $body = $body.Substring(0, $Inner) }
+    [pscustomobject]@{ Left = $script:UiGlyph.V; Text = $body; Right = $script:UiGlyph.V; Fg = $Fg; Highlight = $Highlight }
+}
+
+function Get-MenuFrame {
+    param(
+        [string]$Title,
+        [object[]]$Items,
+        [int]$Cursor,
+        [string[]]$StatusLines = @(),
+        [string]$Footer = '',
+        [int]$Width = 60,
+        [hashtable]$Glyph
+    )
+    if ($Glyph) { $script:UiGlyph = $Glyph }
+    $g = $script:UiGlyph
+    $inner = $Width - 2
+    $rule  = { param($l, $r) [pscustomobject]@{ Left = $l; Text = ($g.H * $inner); Right = $r; Fg = $script:UiColor.Frame; Highlight = $false } }
+    $out = New-Object 'System.Collections.Generic.List[object]'
+    $out.Add((& $rule $g.TL $g.TR))
+    $out.Add((New-UiRow -Text $Title -Fg $script:UiColor.Title -Highlight $false -Inner $inner))
+    $out.Add((New-UiRow -Text '' -Fg $script:UiColor.Dim -Highlight $false -Inner $inner))
+    foreach ($s in $StatusLines) { $out.Add((New-UiRow -Text $s -Fg $script:UiColor.Dim -Highlight $false -Inner $inner)) }
+    $out.Add((New-UiRow -Text '' -Fg $script:UiColor.Dim -Highlight $false -Inner $inner))
+    for ($i = 0; $i -lt $Items.Count; $i++) {
+        $cur = if ($i -eq $Cursor) { $g.Cursor } else { ' ' }
+        $txt = '{0} {1,2}  {2}' -f $cur, ($i + 1), $Items[$i].Label
+        $out.Add((New-UiRow -Text $txt -Fg $script:UiColor.Normal -Highlight ($i -eq $Cursor) -Inner $inner))
+    }
+    $out.Add((New-UiRow -Text '' -Fg $script:UiColor.Dim -Highlight $false -Inner $inner))
+    $out.Add((& $rule $g.BL $g.BR))
+    if ($Footer) { $out.Add([pscustomobject]@{ Left = ''; Text = " $Footer"; Right = ''; Fg = $script:UiColor.Dim; Highlight = $false }) }
+    , $out.ToArray()
+}
