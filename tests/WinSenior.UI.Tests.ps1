@@ -149,3 +149,19 @@ Describe 'Get-FrameWidth' {
         Get-FrameWidth | Should -BeGreaterThan 0
     }
 }
+
+Describe 'Show-Menu (non-interactive fallback)' {
+    It 'returns $null when input is redirected instead of hanging' {
+        $items = 1..2 | ForEach-Object { [pscustomobject]@{ Label = "Opt $_" } }
+        Show-Menu -Title 'T' -Items $items | Should -Be $null
+    }
+}
+
+Describe 'Show-Checklist (non-interactive fallback)' {
+    It 'returns without hanging and leaves the set unchanged' {
+        $items = @([pscustomobject]@{ Id = 'a'; Name = 'A'; Group = 'G'; Risk = 'Safe' })
+        $on = New-Object 'System.Collections.Generic.HashSet[string]'
+        { Show-Checklist -Title 'T' -Items $items -OnSet $on } | Should -Not -Throw
+        $on.Count | Should -Be 0
+    }
+}

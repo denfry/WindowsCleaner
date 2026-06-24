@@ -101,6 +101,64 @@ function Get-MenuFrame {
     , $out.ToArray()
 }
 
+function Show-Menu {
+    param(
+        [string]$Title,
+        [object[]]$Items,
+        [string[]]$StatusLines = @(),
+        [string]$Footer = 'Up/Down move   Enter select   Esc back'
+    )
+    # Arrow-key TUI needs an interactive console. When input is redirected
+    # (piped, CI, or a non-interactive host) a raw ReadKey/ReadLine would either
+    # throw or block forever, so degrade to "exit the menu" rather than hang.
+    if ([Console]::IsInputRedirected) {
+        Write-Host 'WinSenior menu needs an interactive console (arrow-key navigation).' -ForegroundColor Yellow
+        Write-Host 'For automation, run the engine scripts directly with parameters.' -ForegroundColor DarkGray
+        return $null
+    }
+    $cursor = 0
+    $w = Get-FrameWidth
+    while ($true) {
+        $frame = Get-MenuFrame -Title $Title -Items $Items -Cursor $cursor -StatusLines $StatusLines -Footer $Footer -Width $w -Glyph $script:UiGlyph
+        Write-Frame -Lines $frame
+        $act = Resolve-MenuAction -Token (Read-MenuKey) -Cursor $cursor -Count $Items.Count
+        $cursor = $act.Cursor
+        switch ($act.Result) {
+            'select' { return $act.Index }
+            'back'   { return $null }
+        }
+    }
+}
+
+function Show-Checklist {
+    param(
+        [string]$Title,
+        [object[]]$Items,
+        $OnSet,
+        [string[]]$StatusLines = @(),
+        [string]$Footer = 'Up/Down move   Space toggle   a all   n none   Enter done   Esc back'
+    )
+    if ([Console]::IsInputRedirected) { return }
+    $cursor = 0
+    $w = Get-FrameWidth
+    while ($true) {
+        $frame = Get-ChecklistFrame -Title $Title -Items $Items -Cursor $cursor -OnSet $OnSet -StatusLines $StatusLines -Footer $Footer -Width $w -Glyph $script:UiGlyph
+        Write-Frame -Lines $frame
+        $act = Resolve-ChecklistAction -Token (Read-MenuKey) -Cursor $cursor -Count $Items.Count
+        $cursor = $act.Cursor
+        switch ($act.Action) {
+            'toggle' {
+                $id = $Items[$act.Index].Id
+                if ($OnSet.Contains($id)) { [void]$OnSet.Remove($id) } else { [void]$OnSet.Add($id) }
+            }
+            'all'    { foreach ($it in $Items) { [void]$OnSet.Add($it.Id) } }
+            'none'   { $OnSet.Clear() }
+            'done'   { return }
+            'cancel' { return }
+        }
+    }
+}
+
 function Read-MenuKey {
     if ([Console]::IsInputRedirected) { return 'Redirected' }
     $k = [Console]::ReadKey($true)
