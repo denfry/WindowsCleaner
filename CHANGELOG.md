@@ -4,6 +4,45 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.0] - 2026-09-14
+
+### Added
+- **Desktop application** (`WinSenior.Gui.ps1`, WPF — ships with Windows, nothing to
+  install) with pages for cleanup, optimization, troubleshooting, undo & restore, schedule
+  and about. *Scan* fills a per-task "Would free" column from the engine's JSON report;
+  optimization rows show their live applied state; troubleshooting shows OK/Warn/Fail with
+  detail and lets you tick the problems to fix. Engine output streams into a resizable log
+  panel with cancel and save. Selections and options persist in
+  `%ProgramData%\WinSenior\gui-settings.json`. The app launches the engine scripts with
+  parameters — it never re-implements deletion.
+- **One-command launcher** `WinSenior.cmd`: unblocks the scripts, elevates once (UAC),
+  starts the app without a console. `WinSenior.cmd console` opens the arrow-key menu;
+  `WinSenior.ps1 -Gui` opens the app from PowerShell.
+- **Cleanup engine: `-DeferLocked`** schedules locked/in-use files for deletion at the next
+  reboot (`MoveFileEx` + `MOVEFILE_DELAY_UNTIL_REBOOT`) instead of counting them as errors;
+  the summary and JSON report carry a `TotalDeferred` counter.
+- **Cleanup engine: partial-folder accounting** — when a folder is only partly deletable
+  the bytes that did go away are still counted; age-filtered runs prune the empty folder
+  skeletons they leave behind.
+- **Cleanup coverage 63 → 97:** Visual Studio, Python tools (uv/poetry/pipx/pyenv), JVM
+  wrappers, .NET SDK, Node toolchain (node-gyp/electron/bun/deno/Cypress), GitHub Desktop,
+  Composer, Docker Desktop/WSL logs, ML & browser-automation caches (off by default);
+  Telegram, WhatsApp, Zoom/Skype/Signal/Viber, a generic Electron/Chromium cache sweep,
+  media players, UWP temp state, notification cache, GPU vendor apps; game launcher logs,
+  engine caches (Unreal/Unity/Godot), per-game shader caches on every disk; service-account
+  temps, setup/upgrade/servicing logs, Windows misc caches, BITS queue, DNS/ARP/NetBIOS
+  flush, silent Store reset, standby-memory purge, Search index rebuild (off); diagnostics
+  & telemetry caches, third-party app logs, installer leftovers, empty-folder pruning;
+  hibernation off and old shadow-copy pruning (Dangerous, off).
+- Automation hooks for smoke tests: `WINSENIOR_GUI_AUTOCLOSE`, `WINSENIOR_GUI_AUTORUN`,
+  `WINSENIOR_GUI_SCREENSHOT`. New Pester file `tests/WinSenior.Gui.Tests.ps1` loads the
+  embedded XAML into a real WPF window and checks every wired control exists.
+
+### Fixed
+- The console menu's status line called an undefined `Test-Admin`; it now uses
+  `Test-AdminPrivileges` from the shared library.
+- Cleanup engine banner printed a hard-coded `v6.0`; it now reads `Get-WinSeniorVersion`.
+
 ## [6.1.0] - 2026-06-24
 
 ### Added

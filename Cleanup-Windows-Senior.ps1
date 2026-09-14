@@ -15,7 +15,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.1.0
+    Version : 6.2.0
     Requires: PowerShell 5.1+ (Windows). Administrator rights for most tasks.
 
 .EXAMPLE
@@ -82,6 +82,11 @@ param(
     # Only delete files older than N days (0 = no age filter). Per-task minimums still apply.
     [int]$MaxAgeDays = 0,
 
+    # Files that are locked/in use are scheduled for deletion at next reboot
+    # (MoveFileEx MOVEFILE_DELAY_UNTIL_REBOOT) instead of being counted as errors.
+    [Alias('dl')]
+    [switch]$DeferLocked,
+
     [string]$LogPath = "$env:TEMP\WindowsCleanup.log",
 
     # Optional path for a machine-readable JSON report
@@ -102,6 +107,7 @@ $script:Stats           = New-Object System.Collections.Generic.List[object]
 $script:TotalBytes      = [int64]0
 $script:TotalFiles      = 0
 $script:TotalErrors     = 0
+$script:TotalDeferred   = 0
 $script:RestorePointMade = $false
 
 # -DryRun is a friendly alias for -WhatIf. Setting the preference here makes it
@@ -215,6 +221,54 @@ function Expand-TaskPath {
 }
 
 # =====================================================================
+# CORE: LOCKED-FILE HANDLING (delete-on-reboot via MoveFileEx)
+# =====================================================================
+function Initialize-DeferredDelete {
+    if ('WinSenior.Native' -as [type]) { return }
+    Add-Type -Namespace WinSenior -Name Native -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+public static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, int dwFlags);
+'@ -ErrorAction SilentlyContinue
+}
+
+# Schedule a locked file (or every file under a locked folder) for deletion at
+# the next reboot. Returns the number of entries queued.
+function Register-DeferredDelete {
+    param([string]$FullPath)
+    Initialize-DeferredDelete
+    if (-not ('WinSenior.Native' -as [type])) { return 0 }
+    $queued = 0
+    $targets = if (Test-Path -LiteralPath $FullPath -PathType Container) {
+        # Files first (deepest first), then the directories themselves.
+        @(Get-ChildItem -LiteralPath $FullPath -Recurse -Force -ErrorAction SilentlyContinue |
+            Sort-Object { $_.FullName.Length } -Descending | ForEach-Object FullName) + @($FullPath)
+    } else { @($FullPath) }
+    foreach ($t in $targets) {
+        if (-not (Test-Path -LiteralPath $t)) { continue }   # already gone
+        if ([WinSenior.Native]::MoveFileEx($t, $null, 4)) { $queued++ }   # 4 = MOVEFILE_DELAY_UNTIL_REBOOT
+    }
+    $queued
+}
+
+# After an age-filtered pass, remove sub-folders that were left empty.
+function Remove-EmptyDirectory {
+    param([string]$Root)
+    if (-not (Test-Path -LiteralPath $Root -PathType Container)) { return 0 }
+    $removed = 0
+    $dirs = Get-ChildItem -LiteralPath $Root -Directory -Recurse -Force -ErrorAction SilentlyContinue |
+            Sort-Object { $_.FullName.Length } -Descending
+    foreach ($d in $dirs) {
+        if (-not (Test-SafeToDelete $d.FullName)) { continue }
+        $any = Get-ChildItem -LiteralPath $d.FullName -Force -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $any) {
+            Remove-Item -LiteralPath $d.FullName -Force -ErrorAction SilentlyContinue
+            if (-not (Test-Path -LiteralPath $d.FullName)) { $removed++ }
+        }
+    }
+    $removed
+}
+
+# =====================================================================
 # CORE: PATH CLEANUP (honest accounting + real ShouldProcess)
 # =====================================================================
 function Invoke-PathCleanup {
@@ -225,7 +279,7 @@ function Invoke-PathCleanup {
         [string]$Description = 'items'
     )
 
-    $files = 0; [int64]$bytes = 0; $errors = 0
+    $files = 0; [int64]$bytes = 0; $errors = 0; $deferred = 0
     $cutoff = if ($AgeDays -gt 0) { (Get-Date).AddDays(-$AgeDays) } else { $null }
 
     foreach ($spec in $Path) {
@@ -251,6 +305,16 @@ function Invoke-PathCleanup {
                     if (-not (Test-Path -LiteralPath $full)) { $files += $count; $bytes += $size }
                 }
                 catch {
+                    # Partial success inside a folder still counts: measure what is left.
+                    if (Test-Path -LiteralPath $full) {
+                        $left = Get-ItemSize (Get-Item -LiteralPath $full -Force -ErrorAction SilentlyContinue)
+                        if ($left -lt $size) { $bytes += ($size - $left) }
+                        if ($DeferLocked -and (Register-DeferredDelete $full) -gt 0) {
+                            $deferred++
+                            Write-CleanupLog "  deferred to reboot: $full" 'Debug'
+                            continue
+                        }
+                    }
                     $errors++
                     Write-CleanupLog "  $full : $($_.Exception.Message)" 'Debug'
                 }
@@ -260,9 +324,14 @@ function Invoke-PathCleanup {
                 $files += $count; $bytes += $size
             }
         }
+
+        # Age-filtered passes leave empty folder skeletons behind - tidy them.
+        if ($cutoff -and -not (Test-WhatIfMode) -and ($spec -match '[\*\?]')) {
+            [void](Remove-EmptyDirectory -Root $container)
+        }
     }
 
-    [pscustomobject]@{ Files = $files; Bytes = $bytes; Errors = $errors }
+    [pscustomobject]@{ Files = $files; Bytes = $bytes; Errors = $errors; Deferred = $deferred }
 }
 
 # Stop a set of services, run a body, then restart whatever was running.
@@ -435,6 +504,55 @@ function Get-CleanupTaskRegistry {
         New-CleanupTask ps-modulecache 'PowerShell module analysis cache' DevTools Safe -Paths @(
             '<USER>\AppData\Local\Microsoft\Windows\PowerShell\ModuleAnalysisCache',
             '<USER>\AppData\Local\Microsoft\Windows\PowerShell\StartupProfileData-*')
+        New-CleanupTask vs 'Visual Studio component & IntelliSense caches' DevTools Safe -Paths @(
+            '<USER>\AppData\Local\Microsoft\VisualStudio\*\ComponentModelCache\*',
+            '<USER>\AppData\Local\Microsoft\VSApplicationInsights\*',
+            '<USER>\AppData\Local\Microsoft\VSCommon\*\SQM\*',
+            '<USER>\AppData\Local\Temp\VSFeedbackIntelliCodeLogs\*',
+            '<USER>\AppData\Local\Temp\VSRemoteControl\*',
+            '<USER>\AppData\Local\Microsoft\Team Foundation\*\Cache\*')
+        New-CleanupTask python-tools 'Python tool caches (uv / poetry / pipx / pyenv)' DevTools Safe -Paths @(
+            '<USER>\AppData\Local\uv\cache\*',
+            '<USER>\AppData\Local\pypoetry\Cache\*',
+            '<USER>\.cache\pypoetry\*',
+            '<USER>\AppData\Local\pipx\.cache\*',
+            '<USER>\.pyenv\pyenv-win\install_cache\*')
+        New-CleanupTask java-tools 'JVM build caches (Maven/Gradle wrapper dists, sbt boot, kotlin daemon)' DevTools Safe -Paths @(
+            '<USER>\.m2\wrapper\dists\*',
+            '<USER>\.gradle\daemon\*\*.log',
+            '<USER>\.gradle\wrapper\dists\*\*\*.zip',
+            '<USER>\.sbt\boot\*',
+            '<USER>\AppData\Local\kotlin\daemon\*')
+        New-CleanupTask dotnet-tools '.NET SDK temp & telemetry caches' DevTools Safe -Paths @(
+            '<USER>\AppData\Local\Temp\.net\*',
+            '<USER>\.dotnet\TelemetryStorageService\*',
+            '<USER>\.dotnet\sdk-advertising\*')
+        New-CleanupTask node-tools 'Node toolchain caches (node-gyp / electron / bun / deno / Cypress)' DevTools Safe -Paths @(
+            '<USER>\AppData\Local\node-gyp\Cache\*',
+            '<USER>\AppData\Local\electron\Cache\*',
+            '<USER>\AppData\Local\electron-builder\Cache\*',
+            '<USER>\.bun\install\cache\*',
+            '<USER>\AppData\Local\deno\deps\*',
+            '<USER>\AppData\Local\deno\npm\*',
+            '<USER>\AppData\Local\Cypress\Cache\*')
+        New-CleanupTask git-tools 'GitHub Desktop logs & cache' DevTools Safe -Paths @(
+            '<USER>\AppData\Roaming\GitHub Desktop\logs\*',
+            '<USER>\AppData\Roaming\GitHub Desktop\Cache\*',
+            '<USER>\AppData\Roaming\GitHub Desktop\GPUCache\*')
+        New-CleanupTask composer-php 'PHP Composer cache' DevTools Safe -Paths @(
+            '<USER>\AppData\Local\Composer\files\*',
+            '<USER>\AppData\Local\Composer\repo\*')
+        New-CleanupTask ml-caches 'ML model & browser-automation caches (HuggingFace / torch / Playwright / Puppeteer)' DevTools Moderate -DefaultOn $false -Paths @(
+            '<USER>\.cache\huggingface\hub\*',
+            '<USER>\.cache\torch\hub\*',
+            '<USER>\.cache\ms-playwright\*',
+            '<USER>\AppData\Local\ms-playwright\*',
+            '<USER>\.cache\puppeteer\*')
+        New-CleanupTask docker-logs 'Docker Desktop / WSL logs & caches' DevTools Safe -Paths @(
+            '<USER>\AppData\Local\Docker\log\*',
+            '<USER>\AppData\Roaming\Docker Desktop\Cache\*',
+            '<USER>\AppData\Roaming\Docker Desktop\GPUCache\*',
+            '<USER>\AppData\Local\Temp\wsl-*')
 
         # ---------------- Apps / messengers (Safe) ----------------
         New-CleanupTask appcache 'Windows app cache' Apps Safe -Paths @(
@@ -471,6 +589,65 @@ function Get-CleanupTaskRegistry {
             '<USER>\AppData\Local\Adobe\CameraRaw\Cache\*')
         New-CleanupTask rdp-cache 'Remote Desktop client bitmap cache' Apps Safe -Paths @(
             '<USER>\AppData\Local\Microsoft\Terminal Server Client\Cache\*')
+        New-CleanupTask telegram 'Telegram Desktop media cache' Apps Safe -Paths @(
+            '<USER>\AppData\Roaming\Telegram Desktop\tdata\user_data\cache\*',
+            '<USER>\AppData\Roaming\Telegram Desktop\tdata\user_data\media_cache\*',
+            '<USER>\AppData\Roaming\Telegram Desktop\tdata\emoji\*',
+            '<USER>\AppData\Local\Packages\TelegramMessengerLLP.TelegramDesktop_*\LocalCache\Roaming\Telegram Desktop UWP\tdata\user_data\cache\*')
+        New-CleanupTask whatsapp 'WhatsApp Desktop cache' Apps Safe -Paths @(
+            '<USER>\AppData\Local\Packages\5319275A.WhatsAppDesktop_*\LocalCache\*',
+            '<USER>\AppData\Roaming\WhatsApp\Cache\*',
+            '<USER>\AppData\Roaming\WhatsApp\Code Cache\*',
+            '<USER>\AppData\Roaming\WhatsApp\GPUCache\*')
+        New-CleanupTask messengers 'Zoom / Skype / Signal / Viber caches & logs' Apps Safe -Paths @(
+            '<USER>\AppData\Roaming\Zoom\logs\*',
+            '<USER>\AppData\Roaming\Zoom\data\Cache\*',
+            '<USER>\AppData\Roaming\Microsoft\Skype for Desktop\Cache\*',
+            '<USER>\AppData\Roaming\Microsoft\Skype for Desktop\Code Cache\*',
+            '<USER>\AppData\Roaming\Microsoft\Skype for Desktop\logs\*',
+            '<USER>\AppData\Roaming\Signal\logs\*',
+            '<USER>\AppData\Roaming\Signal\Cache\*',
+            '<USER>\AppData\Roaming\ViberPC\*\Cache\*')
+        # Moderate: catches every Chromium/Electron app, not just the ones listed by name.
+        New-CleanupTask electron-generic 'Generic Electron/Chromium app caches (any app in AppData)' Apps Moderate -Paths @(
+            '<USER>\AppData\Roaming\*\Cache\*',
+            '<USER>\AppData\Roaming\*\Code Cache\*',
+            '<USER>\AppData\Roaming\*\GPUCache\*',
+            '<USER>\AppData\Roaming\*\DawnCache\*',
+            '<USER>\AppData\Roaming\*\DawnGraphiteCache\*',
+            '<USER>\AppData\Roaming\*\DawnWebGPUCache\*',
+            '<USER>\AppData\Roaming\*\Service Worker\CacheStorage\*',
+            '<USER>\AppData\Local\*\GPUCache\*',
+            '<USER>\AppData\Local\*\DawnCache\*')
+        New-CleanupTask media-players 'Media player caches (VLC / iTunes / Windows Media Player / Plex)' Apps Safe -Paths @(
+            '<USER>\AppData\Roaming\vlc\art\*',
+            '<USER>\AppData\Local\Microsoft\Media Player\Art Cache\*',
+            '<USER>\AppData\Local\Microsoft\Media Player\Transcoded Files Cache\*',
+            '<USER>\AppData\Local\Plex Media Server\Cache\*',
+            '<USER>\AppData\Local\Plex\Cache\*')
+        New-CleanupTask uwp-caches 'Store app (UWP) temp state & local caches' Apps Safe -Paths @(
+            '<USER>\AppData\Local\Packages\*\TempState\*',
+            '<USER>\AppData\Local\Packages\*\LocalCache\Local\Microsoft\Windows\INetCache\*',
+            '<USER>\AppData\Local\Packages\*\AC\Microsoft\Internet Explorer\DOMStore\*',
+            '<USER>\AppData\Local\Packages\Microsoft.Windows.Photos_*\LocalState\PhotosAppCache\*',
+            '<USER>\AppData\Local\Packages\Microsoft.WindowsStore_*\LocalCache\*',
+            '<USER>\AppData\Local\Packages\Microsoft.Windows.ContentDeliveryManager_*\LocalCache\*')
+        New-CleanupTask notifications 'Notification image cache & Explorer side caches' Apps Safe -Paths @(
+            '<USER>\AppData\Local\Microsoft\Windows\Notifications\wpnidm\*',
+            '<USER>\AppData\Local\Microsoft\Windows\Caches\*',
+            '<USER>\AppData\Local\Microsoft\Windows\SchCache\*',
+            '<USER>\AppData\Local\Microsoft\Windows\WebCache.old\*')
+        New-CleanupTask gpu-apps 'GPU vendor app caches & telemetry (NVIDIA App / GeForce Experience / AMD / Intel)' Apps Safe -Paths @(
+            '<USER>\AppData\Local\NVIDIA Corporation\NVIDIA App\CefCache\*',
+            '<USER>\AppData\Local\NVIDIA Corporation\NVIDIA GeForce Experience\CefCache\*',
+            '<USER>\AppData\Local\NVIDIA Corporation\NvTelemetry\*',
+            '%ProgramData%\NVIDIA Corporation\NvTelemetry\*',
+            '%ProgramData%\NVIDIA Corporation\Downloader\*',
+            '<USER>\AppData\Local\AMD\CN\Cache\*',
+            '<USER>\AppData\Local\AMD\DxCache\*',
+            '<USER>\AppData\Local\AMD\GLCache\*',
+            '<USER>\AppData\Local\AMD\VkCache\*',
+            '<USER>\AppData\Local\Intel\ShaderCache\*')
 
         # ---------------- Games (launcher caches, Safe) ----------------
         New-CleanupTask game-caches 'Game launcher caches (Steam/Epic/Battle.net/GOG)' Games Safe -Paths @(
@@ -481,6 +658,32 @@ function Get-CleanupTaskRegistry {
             '<USER>\AppData\Local\Battle.net\Cache\*',
             '%ProgramData%\Battle.net\Agent\data\cache\*',
             '<USER>\AppData\Local\GOG.com\Galaxy\webcache\*')
+        New-CleanupTask game-logs 'Game launcher logs & crash dumps (Steam/Epic/EA/Ubisoft/Riot/Xbox)' Games Safe -Paths @(
+            '%ProgramFiles(x86)%\Steam\logs\*',
+            '%ProgramFiles(x86)%\Steam\dumps\*',
+            '<USER>\AppData\Local\EpicGamesLauncher\Saved\Logs\*',
+            '<USER>\AppData\Local\EpicGamesLauncher\Saved\Crashes\*',
+            '<USER>\AppData\Local\Electronic Arts\EA Desktop\Logs\*',
+            '<USER>\AppData\Local\Electronic Arts\EA Desktop\cache\*',
+            '<USER>\AppData\Local\Ubisoft Game Launcher\logs\*',
+            '<USER>\AppData\Local\Ubisoft Game Launcher\cache\*',
+            '<USER>\AppData\Local\Riot Games\Riot Client\Logs\*',
+            '%ProgramData%\Riot Games\Logs\*',
+            '<USER>\AppData\Local\Packages\Microsoft.GamingApp_*\LocalCache\*',
+            '<USER>\AppData\Local\Packages\Microsoft.XboxGamingOverlay_*\TempState\*')
+        New-CleanupTask game-engines 'Game engine caches (Unreal DDC / Unity / Godot)' Games Moderate -Paths @(
+            '<USER>\AppData\Local\UnrealEngine\Common\DerivedDataCache\*',
+            '<USER>\AppData\Local\UnrealEngine\*\Saved\Logs\*',
+            '<USER>\AppData\Local\UnrealEngine\*\Saved\Crashes\*',
+            '<USER>\AppData\Local\Unity\cache\*',
+            '<USER>\AppData\LocalLow\Unity\Caches\*',
+            '<USER>\AppData\Roaming\Godot\shader_cache\*',
+            '<USER>\AppData\Roaming\Godot\logs\*')
+        New-CleanupTask game-shaders 'Per-game shader caches on every disk (Steam libraries / Unity games)' Games Aggressive -Paths @(
+            '<DRIVE>SteamLibrary\steamapps\shadercache\*',
+            '<DRIVE>Games\Steam\steamapps\shadercache\*',
+            '<DRIVE>Steam\steamapps\shadercache\*',
+            '<USER>\AppData\LocalLow\*\*\ShaderCache\*')
 
         # ---------------- System (Safe / Moderate / Aggressive) ----------------
         New-CleanupTask temp-user 'User temp files' System Safe -Paths @(
@@ -512,6 +715,88 @@ function Get-CleanupTaskRegistry {
         New-CleanupTask deliveryopt 'Delivery Optimization cache' System Safe -Paths @(
             '%WINDIR%\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\*',
             '%ProgramData%\Microsoft\Windows\DeliveryOptimization\*')
+        New-CleanupTask svc-temp 'Service-account temp folders (LocalService / NetworkService / system profile)' System Safe -Paths @(
+            '%WINDIR%\ServiceProfiles\LocalService\AppData\Local\Temp\*',
+            '%WINDIR%\ServiceProfiles\NetworkService\AppData\Local\Temp\*',
+            '%WINDIR%\System32\config\systemprofile\AppData\Local\Temp\*',
+            '%WINDIR%\SysWOW64\config\systemprofile\AppData\Local\Temp\*',
+            '%WINDIR%\ServiceProfiles\LocalService\AppData\Local\Microsoft\Windows\INetCache\*',
+            '%WINDIR%\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\INetCache\*',
+            '%WINDIR%\System32\config\systemprofile\AppData\Local\Microsoft\Windows\INetCache\*',
+            '%SystemDrive%\Users\Default\AppData\Local\Temp\*')
+        New-CleanupTask upgrade-logs 'Windows setup / upgrade / servicing logs (Panther, CBS, USO, WindowsUpdate.log)' System Safe -Paths @(
+            '%WINDIR%\Panther\*.log',
+            '%WINDIR%\Panther\*.xml',
+            '%WINDIR%\Panther\UnattendGC\*',
+            '%WINDIR%\Logs\CBS\*.log',
+            '%WINDIR%\Logs\CBS\*.cab',
+            '%WINDIR%\Logs\MoSetup\*',
+            '%WINDIR%\Logs\WindowsUpdate\*',
+            '%WINDIR%\Logs\NetSetup\*',
+            '%WINDIR%\Logs\waasmedic\*',
+            '%WINDIR%\Logs\SIH\*',
+            '%ProgramData%\USOShared\Logs\*',
+            '%WINDIR%\WindowsUpdate.log',
+            '%WINDIR%\setupact.log',
+            '%WINDIR%\setuperr.log',
+            '%WINDIR%\PFRO.log')
+        New-CleanupTask win-misc 'Windows misc caches (Offline Web Pages, Defender scan cache, Search temp, PerfLogs)' System Safe -Paths @(
+            '%WINDIR%\Offline Web Pages\*',
+            '%ProgramData%\Microsoft\Windows Defender\Scans\mpcache-*',
+            '%ProgramData%\Microsoft\Windows Defender\Scans\MetaStore\*',
+            '%ProgramData%\Microsoft\Windows Defender\Scans\FilesStash\*',
+            '%ProgramData%\Microsoft\Windows\Caches\*',
+            '%ProgramData%\Microsoft\Search\Data\Temp\*',
+            '%SystemDrive%\PerfLogs\*')
+        New-CleanupTask bits-cache 'BITS transfer queue (stuck / partial background downloads)' System Moderate -StopServices @('BITS') -Paths @(
+            '%ProgramData%\Microsoft\Network\Downloader\*.tmp',
+            '%ProgramData%\Microsoft\Network\Downloader\qmgr*.dat',
+            '%ProgramData%\Microsoft\Network\Downloader\qmgr.db',
+            '%ProgramData%\Microsoft\Network\Downloader\qmgr.jfm')
+        New-CleanupTask dns-flush 'Flush DNS resolver, ARP & NetBIOS caches' System Safe -Action {
+            Invoke-NativeStep 'ipconfig /flushdns' { & ipconfig.exe /flushdns *>$null } | Out-Null
+            Invoke-NativeStep 'arp -d *'           { & arp.exe -d * *>$null } | Out-Null
+            Invoke-NativeStep 'nbtstat -R'         { & nbtstat.exe -R *>$null } | Out-Null
+            $null
+        }
+        New-CleanupTask store-reset 'Reset Microsoft Store cache (WSReset, silent)' System Safe -Action {
+            $exe = Join-Path $env:WINDIR 'System32\WSReset.exe'
+            if (-not (Test-Path $exe)) { return $null }
+            Invoke-NativeStep 'WSReset.exe -i' {
+                $p = Start-Process -FilePath $exe -ArgumentList '-i' -WindowStyle Hidden -PassThru
+                if (-not $p.WaitForExit(60000)) { $p.Kill() }
+            } | Out-Null
+            $null
+        }
+        New-CleanupTask memory-standby 'Purge standby memory list & trim working sets (frees RAM, not disk)' System Safe -Action {
+            # Same documented NtSetSystemInformation(SystemMemoryListInformation) call RAMMap uses.
+            if (Test-WhatIfMode) { Write-CleanupLog '[WhatIf] would purge standby memory list' 'WhatIf'; return $null }
+            if (-not ('WinSenior.Memory' -as [type])) {
+                Add-Type -Namespace WinSenior -Name Memory -MemberDefinition @'
+[DllImport("ntdll.dll")] public static extern int NtSetSystemInformation(int cls, ref int info, int len);
+[DllImport("advapi32.dll", SetLastError=true)] public static extern bool OpenProcessToken(IntPtr h, int acc, out IntPtr tok);
+[DllImport("advapi32.dll", SetLastError=true, CharSet=CharSet.Unicode)] public static extern bool LookupPrivilegeValue(string s, string n, out long luid);
+[DllImport("advapi32.dll", SetLastError=true)] public static extern bool AdjustTokenPrivileges(IntPtr tok, bool dis, ref TOKP np, int len, IntPtr prev, IntPtr ret);
+[StructLayout(LayoutKind.Sequential)] public struct TOKP { public int Count; public long Luid; public int Attr; }
+public static bool Enable(string name) {
+    IntPtr tok; if (!OpenProcessToken(System.Diagnostics.Process.GetCurrentProcess().Handle, 0x28, out tok)) return false;
+    TOKP tp; tp.Count = 1; tp.Attr = 2; if (!LookupPrivilegeValue(null, name, out tp.Luid)) return false;
+    return AdjustTokenPrivileges(tok, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+}
+'@ -ErrorAction SilentlyContinue
+            }
+            if (-not ('WinSenior.Memory' -as [type])) { return $null }
+            [void][WinSenior.Memory]::Enable('SeProfileSingleProcessPrivilege')
+            [void][WinSenior.Memory]::Enable('SeIncreaseQuotaPrivilege')
+            $before = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory * 1KB
+            foreach ($cmd in 4, 2) {   # 4 = purge standby list, 2 = empty working sets
+                $v = [int]$cmd
+                [void][WinSenior.Memory]::NtSetSystemInformation(80, [ref]$v, 4)
+            }
+            $after = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory * 1KB
+            Write-CleanupLog ("  RAM freed: {0}" -f (Format-FileSize ([Math]::Max([int64]0, [int64]($after - $before))))) 'Success'
+            $null
+        }
         New-CleanupTask recent 'Recent items & jump lists' System Moderate -DefaultOn $true -Paths @(
             '<USER>\AppData\Roaming\Microsoft\Windows\Recent\*')
         New-CleanupTask fontcache 'Font cache' System Moderate -StopServices @('FontCache') -Paths @(
@@ -519,6 +804,27 @@ function Get-CleanupTaskRegistry {
         New-CleanupTask winlogs 'Windows log files' System Moderate -Paths @('%WINDIR%\Logs\*')
         New-CleanupTask prefetch 'Prefetch (rebuilt by Windows)' System Aggressive -Paths @(
             '%WINDIR%\Prefetch\*')
+        New-CleanupTask search-index 'Rebuild Windows Search index (deletes Windows.edb, re-indexes in background)' System Aggressive -DefaultOn $false -Action {
+            $db = @("$env:ProgramData\Microsoft\Search\Data\Applications\Windows\Windows.edb",
+                    "$env:ProgramData\Microsoft\Search\Data\Applications\Windows\Windows.db")
+            $existing = @($db | Where-Object { Test-Path -LiteralPath $_ })
+            if (-not $existing) { Write-CleanupLog '  no search index database found' 'Debug'; return $null }
+            $size = ($existing | ForEach-Object { (Get-Item -LiteralPath $_ -Force).Length } | Measure-Object -Sum).Sum
+            if (Test-WhatIfMode) {
+                Write-CleanupLog "[WhatIf] would delete search index ($(Format-FileSize $size)) and trigger a rebuild" 'WhatIf'
+                return [pscustomobject]@{ Files = $existing.Count; Bytes = $size; Errors = 0 }
+            }
+            Use-StoppedService -Name 'WSearch' -Body {
+                $ok = 0; $err = 0
+                foreach ($f in $existing) {
+                    Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue
+                    if (Test-Path -LiteralPath $f) { $err++ } else { $ok++ }
+                }
+                # SetupCompletedSuccessfully=0 makes the indexer rebuild from scratch on next start.
+                Set-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Search' -Name SetupCompletedSuccessfully -Value 0 -Type DWord -ErrorAction SilentlyContinue
+                [pscustomobject]@{ Files = $ok; Bytes = $(if ($err) { 0 } else { $size }); Errors = $err }
+            }
+        }
         New-CleanupTask old-drivers 'Remove superseded driver packages (pnputil)' System Dangerous -Action {
             # Enumeration is read-only, but loading the DISM module (triggered by Get-Command
             # or Get-WindowsDriver) runs Set-Alias under the GLOBAL WhatIf preference. Toggle
@@ -590,6 +896,57 @@ function Get-CleanupTaskRegistry {
             '%ProgramData%\Microsoft\Windows Defender\Scans\History\Results\*')
         New-CleanupTask livekernel 'Live kernel crash dumps (driver/GPU TDR)' Logs Safe -Paths @(
             '%WINDIR%\LiveKernelReports\*.dmp')
+        New-CleanupTask diag-telemetry 'Diagnostics & telemetry caches (Diagnosis, ETL traces, SleepStudy, WDI)' Logs Moderate -StopServices @('DiagTrack') -Paths @(
+            '%ProgramData%\Microsoft\Diagnosis\ETLLogs\*',
+            '%ProgramData%\Microsoft\Diagnosis\DownloadedSettings\*',
+            '%ProgramData%\Microsoft\Diagnosis\*.rbs',
+            '%WINDIR%\System32\LogFiles\WMI\*.etl',
+            '%WINDIR%\System32\LogFiles\WMI\RtBackup\*',
+            '%WINDIR%\System32\SleepStudy\*.etl',
+            '%WINDIR%\System32\WDI\LogFiles\*',
+            '%ProgramData%\Microsoft\Windows\Power\*.etl',
+            '<USER>\AppData\Local\Microsoft\Windows\PowerShell\CommandAnalysis\*')
+        New-CleanupTask app-logs 'Third-party app logs (Adobe, Autodesk, Corsair, Logitech, Razer, Intel, PowerToys, Terminal)' Logs Safe -Paths @(
+            '%ProgramData%\Adobe\*\Logs\*',
+            '<USER>\AppData\Local\Adobe\*\Logs\*',
+            '<USER>\AppData\Roaming\Adobe\*\Logs\*',
+            '%ProgramData%\Autodesk\*\Logs\*',
+            '<USER>\AppData\Local\Autodesk\*\Logs\*',
+            '<USER>\AppData\Roaming\Corsair\CUE\logs\*',
+            '<USER>\AppData\Local\LGHUB\logs\*',
+            '<USER>\AppData\Local\Razer\Synapse3\Log\*',
+            '%ProgramData%\Razer\Synapse3\Logs\*',
+            '%ProgramData%\Intel\*\Logs\*',
+            '<USER>\AppData\Local\Microsoft\PowerToys\Logs\*',
+            '<USER>\AppData\Local\Packages\Microsoft.WindowsTerminal_*\LocalState\*.log',
+            '<USER>\AppData\Local\Temp\*.log',
+            '<USER>\AppData\Local\Temp\*.etl',
+            '<USER>\AppData\Local\Temp\*.dmp')
+        New-CleanupTask installer-leftovers 'Installer leftovers (MSI temp, Squirrel/NSIS/Inno temp, Chrome/Edge updater downloads)' Logs Safe -Paths @(
+            '%WINDIR%\Installer\*.tmp',
+            '<USER>\AppData\Local\SquirrelTemp\*',
+            '<USER>\AppData\Local\Temp\nsis*',
+            '<USER>\AppData\Local\Temp\7z*',
+            '<USER>\AppData\Local\Temp\is-*.tmp',
+            '<USER>\AppData\Local\Temp\{*}',
+            '<USER>\AppData\Local\Google\Update\Download\*',
+            '<USER>\AppData\Local\Google\Update\Install\*',
+            '<USER>\AppData\Local\Microsoft\EdgeUpdate\Download\*',
+            '<USER>\AppData\Local\Microsoft\EdgeUpdate\Install\*',
+            '%ProgramFiles(x86)%\Google\Update\Download\*',
+            '%ProgramFiles(x86)%\Microsoft\EdgeUpdate\Download\*')
+        New-CleanupTask empty-dirs 'Remove empty folders left behind in temp locations' Logs Safe -Action {
+            $roots = Expand-TaskPath @('<USER>\AppData\Local\Temp', '%WINDIR%\Temp')
+            $n = 0
+            foreach ($r in $roots) {
+                if (-not (Test-Path -LiteralPath $r)) { continue }
+                if (Test-WhatIfMode) {
+                    $n += @(Get-ChildItem -LiteralPath $r -Directory -Recurse -Force -ErrorAction SilentlyContinue |
+                            Where-Object { -not (Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue | Select-Object -First 1) }).Count
+                } else { $n += Remove-EmptyDirectory -Root $r }
+            }
+            [pscustomobject]@{ Files = $n; Bytes = 0; Errors = 0 }
+        }
         New-CleanupTask srum-db 'Network/app usage telemetry DB (SRUM)' Logs Moderate `
             -StopServices @('DPS') -Paths @('%WINDIR%\System32\sru\*')
         New-CleanupTask eventtranscript 'Diagnostic telemetry database (EventTranscript)' Logs Moderate `
@@ -648,6 +1005,33 @@ function Get-CleanupTaskRegistry {
                 if ($r) { $total.Bytes += $r.Bytes; $total.Errors += $r.Errors }
             }
             $total
+        }
+
+        New-CleanupTask hiberfil 'Disable hibernation & delete hiberfil.sys (also disables Fast Startup)' Updates Dangerous -DefaultOn $false -Action {
+            $f = "$env:SystemDrive\hiberfil.sys"
+            if (-not (Test-Path -LiteralPath $f)) { Write-CleanupLog '  hibernation already off' 'Debug'; return $null }
+            $size = (Get-Item -LiteralPath $f -Force).Length
+            if (Test-WhatIfMode) {
+                Write-CleanupLog "[WhatIf] would run powercfg /hibernate off ($(Format-FileSize $size))" 'WhatIf'
+                return [pscustomobject]@{ Files = 1; Bytes = $size; Errors = 0 }
+            }
+            $ok = Invoke-NativeStep 'powercfg /hibernate off' { & powercfg.exe /hibernate off *>$null }
+            [pscustomobject]@{ Files = 1; Bytes = $(if ($ok) { $size } else { 0 }); Errors = $(if ($ok) { 0 } else { 1 }) }
+        }
+        New-CleanupTask shadow-old 'Delete all but the newest restore point / shadow copy (vssadmin)' Updates Dangerous -DefaultOn $false -Action {
+            $shadows = @(Get-CimInstance Win32_ShadowCopy -ErrorAction SilentlyContinue | Sort-Object InstallDate)
+            if ($shadows.Count -le 1) { Write-CleanupLog '  nothing to prune' 'Debug'; return $null }
+            $old = @($shadows | Select-Object -First ($shadows.Count - 1))
+            if (Test-WhatIfMode) {
+                Write-CleanupLog "[WhatIf] would delete $($old.Count) older shadow copies" 'WhatIf'
+                return [pscustomobject]@{ Files = $old.Count; Bytes = 0; Errors = 0 }
+            }
+            $n = 0
+            foreach ($sc in $old) {
+                & vssadmin.exe delete shadows /shadow=$($sc.ID) /quiet *>$null
+                if ($LASTEXITCODE -eq 0) { $n++ }
+            }
+            [pscustomobject]@{ Files = $n; Bytes = 0; Errors = ($old.Count - $n) }
         }
 
         # ---------------- Optimization (slow; skipped by -SkipOptimization) ----------------
@@ -737,9 +1121,11 @@ function Invoke-CleanupTask {
         $script:TotalBytes  += [int64]$result.Bytes
         $script:TotalFiles  += [int]$result.Files
         $script:TotalErrors += [int]$result.Errors
+        $def = if ($result.PSObject.Properties.Name -contains 'Deferred') { [int]$result.Deferred } else { 0 }
+        $script:TotalDeferred += $def
         $script:Stats.Add([pscustomobject]@{
-            Task = $Task.Id; Category = $Task.Category
-            Files = [int]$result.Files; Bytes = [int64]$result.Bytes; Errors = [int]$result.Errors
+            Task = $Task.Id; Name = $Task.Name; Category = $Task.Category; Risk = $Task.Risk
+            Files = [int]$result.Files; Bytes = [int64]$result.Bytes; Errors = [int]$result.Errors; Deferred = $def
         })
         if ($result.Bytes -gt 0 -or $result.Files -gt 0) {
             $verb = if (Test-WhatIfMode) { 'would free' } else { 'freed' }
@@ -771,7 +1157,11 @@ function Show-CleanupSummary {
     Write-CleanupLog '' 'Info'
     Write-CleanupLog ("{0}: {1}  ({2} items)" -f $verb, (Format-FileSize $script:TotalBytes), $script:TotalFiles) 'Success'
     if ($script:TotalErrors -gt 0) {
-        Write-CleanupLog "Errors (locked/in-use items): $script:TotalErrors" 'Warning'
+        $hint = if ($DeferLocked) { '' } else { '  (use -DeferLocked to remove them at next reboot)' }
+        Write-CleanupLog "Errors (locked/in-use items): $script:TotalErrors$hint" 'Warning'
+    }
+    if ($script:TotalDeferred -gt 0) {
+        Write-CleanupLog "Scheduled for deletion at next reboot: $script:TotalDeferred item(s)" 'Info'
     }
     Write-CleanupLog ("Duration: {0:N1}s   Log: {1}" -f $dur.TotalSeconds, $LogPath) 'Info'
 }
@@ -784,6 +1174,7 @@ function Write-CleanupReport {
             TotalFreed  = (Format-FileSize $script:TotalBytes)
             TotalFiles  = $script:TotalFiles
             TotalErrors = $script:TotalErrors
+            TotalDeferred = $script:TotalDeferred
         } `
         -Items $script:Stats `
         -LogAction { param($m, $l) Write-CleanupLog $m $l }
@@ -823,6 +1214,7 @@ SELECTION
   -Drives <letters>     Local disks for drive-level cleanup, e.g. -Drives C,D (default: all local disks)
   -SkipOptimization,-so Skip the slow SFC/DISM category
   -MaxAgeDays <n>       Only delete files older than n days
+  -DeferLocked, -dl     Schedule locked/in-use files for deletion at next reboot
 
 SAFETY
   -WhatIf / -DryRun,-dr Preview only, change nothing (real ShouldProcess)
@@ -849,7 +1241,7 @@ EXAMPLES
 function Start-WindowsCleanup {
     $modeText  = if (Test-WhatIfMode) { 'DryRun' } else { 'Live' }
     $scopeText = if ($CurrentUserOnly) { 'current user' } else { 'all users' }
-    Write-CleanupLog 'Windows System Cleaner v6.0' 'Step'
+    Write-CleanupLog "Windows System Cleaner v$(Get-WinSeniorVersion)" 'Step'
     Write-CleanupLog ("PowerShell {0} | Mode: {1} | Scope: {2}" -f $PSVersionTable.PSVersion, $modeText, $scopeText) 'Info'
 
     if (-not (Test-AdminPrivileges)) {

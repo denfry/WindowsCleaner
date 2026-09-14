@@ -11,12 +11,16 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.1.0
+    Version : 6.2.0
     Requires: PowerShell 5.1+ (Windows). Administrator rights (auto-elevates).
 
 .EXAMPLE
     .\WinSenior.ps1
     Open the interactive menu.
+
+.EXAMPLE
+    .\WinSenior.ps1 -Gui
+    Open the desktop (WPF) application. Same as double-clicking WinSenior.cmd.
 #>
 
 #Requires -Version 5.1
@@ -30,7 +34,9 @@ param(
     # Register the recurring maintenance scheduled tasks, then exit.
     [switch]$InstallSchedule,
     # Remove the recurring maintenance scheduled tasks, then exit.
-    [switch]$RemoveSchedule
+    [switch]$RemoveSchedule,
+    # Open the desktop (WPF) application instead of the console menu.
+    [switch]$Gui
 )
 
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
@@ -45,6 +51,17 @@ $script:OptimizeScript = Join-Path $script:Root 'Optimize-Windows-Senior.ps1'
 $script:RepairScript   = Join-Path $script:Root 'Repair-Windows-Senior.ps1'
 $script:UiScript       = Join-Path $script:Root 'WinSenior.UI.ps1'
 $script:ScheduleScript = Join-Path $script:Root 'WinSenior.Schedule.ps1'
+
+$script:GuiScript      = Join-Path $script:Root 'WinSenior.Gui.ps1'
+
+# -Gui hands off to the desktop app (it elevates itself and hides the console).
+if ($Gui) {
+    $exe = if ($PSVersionTable.PSEdition -eq 'Core') { Join-Path $PSHOME 'pwsh.exe' } else { Join-Path $PSHOME 'powershell.exe' }
+    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-WindowStyle', 'Hidden', '-File', "`"$script:GuiScript`"")
+    if ($NoElevate) { $a += '-NoElevate' }
+    Start-Process -FilePath $exe -ArgumentList $a -WindowStyle Hidden
+    exit 0
+}
 
 foreach ($s in @($script:CommonScript, $script:CleanupScript, $script:OptimizeScript, $script:RepairScript, $script:UiScript, $script:ScheduleScript)) {
     if (-not (Test-Path $s)) {
@@ -289,7 +306,7 @@ function Show-MainMenu {
         [pscustomobject]@{ Label = 'List tasks, tweaks & checks' }
     )
     while ($true) {
-        $admin = if (Test-Admin) { 'Administrator: yes' } else { 'Administrator: NO - re-run as admin' }
+        $admin = if (Test-AdminPrivileges) { 'Administrator: yes' } else { 'Administrator: NO - re-run as admin' }
         switch (Show-Menu -Title 'Windows Senior - system maintenance' -Items $items -StatusLines @($admin)) {
             0 { Show-CleanupScreen }
             1 { Show-OptimizeScreen }

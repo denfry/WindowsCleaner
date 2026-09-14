@@ -95,3 +95,13 @@ registry integrity, `Resolve-TweakSelection`, and a registry backup→apply→un
 a throwaway `HKCU:\Software\WinSeniorTest` hive; and the troubleshooter's check-registry integrity,
 selection, and scan/fix dispatch with synthetic checks. Destructive paths are validated through
 `-WhatIf`. CI runs them on `windows-latest`.
+
+## Desktop app (v6.2)
+
+`WinSenior.Gui.ps1` is a WPF window (XAML embedded as a here-string, code-behind in
+PowerShell). It dot-sources the engines only to read their registries, default selections
+and applied-state probes; every action is a child `powershell.exe`/`pwsh.exe` process
+running the engine script with `-Include/-Exclude` (+ `-WhatIf`, `-Unattended`,
+`-ReportPath`). Stdout is tailed into the log panel by a `DispatcherTimer`; the JSON report
+is parsed when the child exits to fill sizes / health rows. `WinSenior.cmd` is the
+double-click launcher (unblock, elevate, hidden console).

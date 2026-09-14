@@ -132,3 +132,49 @@ Describe 'New coverage additions' {
         @($script:Reg | Where-Object Id -in 'rdp-cache', 'ps-modulecache', 'win-caches', 'livekernel', 'eventtranscript').Count | Should -Be 5
     }
 }
+
+Describe 'v6.2 coverage & mechanisms' {
+    It 'has grown past 90 tasks' {
+        $script:Reg.Count | Should -BeGreaterThan 90
+    }
+    It 'adds messenger, dev-tool, game-engine, service-temp and upgrade-log tasks' {
+        $ids = 'telegram','whatsapp','messengers','electron-generic','uwp-caches','vs','python-tools','node-tools',
+               'game-logs','game-engines','svc-temp','upgrade-logs','bits-cache','dns-flush','memory-standby',
+               'diag-telemetry','app-logs','installer-leftovers','empty-dirs','search-index','hiberfil','shadow-old'
+        @($script:Reg | Where-Object Id -in $ids).Count | Should -Be $ids.Count
+    }
+    It 'keeps the new irreversible operations off by default and in the Dangerous tier' {
+        foreach ($id in 'hiberfil', 'shadow-old') {
+            $t = $script:Reg | Where-Object Id -eq $id
+            $t.Risk      | Should -Be 'Dangerous'
+            $t.DefaultOn | Should -BeFalse
+        }
+        ($script:Reg | Where-Object Id -eq 'search-index').DefaultOn | Should -BeFalse
+    }
+    It 'stops the owning service before touching BITS / DiagTrack data' {
+        ($script:Reg | Where-Object Id -eq 'bits-cache').StopServices     | Should -Contain 'BITS'
+        ($script:Reg | Where-Object Id -eq 'diag-telemetry').StopServices | Should -Contain 'DiagTrack'
+    }
+    It 'exposes -DeferLocked on the engine' {
+        (Get-Command $script:Sut).Parameters.Keys | Should -Contain 'DeferLocked'
+    }
+    It 'Register-DeferredDelete returns 0 for a path that does not exist' {
+        Register-DeferredDelete (Join-Path $env:TEMP ("no_such_{0}" -f (Get-Random))) | Should -Be 0
+    }
+}
+
+Describe 'Remove-EmptyDirectory' {
+    BeforeAll {
+        $script:Tmp2 = Join-Path ([System.IO.Path]::GetTempPath()) ("pester_empty_{0}" -f (Get-Random))
+        New-Item -ItemType Directory -Path "$script:Tmp2\a\b\c" -Force | Out-Null
+        New-Item -ItemType Directory -Path "$script:Tmp2\keep"    -Force | Out-Null
+        Set-Content -Path "$script:Tmp2\keep\file.txt" -Value 'x'
+    }
+    AfterAll { Remove-Item $script:Tmp2 -Recurse -Force -ErrorAction SilentlyContinue }
+    It 'removes nested empty folders and keeps folders with content' {
+        $n = Remove-EmptyDirectory -Root $script:Tmp2
+        $n | Should -Be 3
+        Test-Path "$script:Tmp2\a"             | Should -BeFalse
+        Test-Path "$script:Tmp2\keep\file.txt" | Should -BeTrue
+    }
+}
