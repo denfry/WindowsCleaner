@@ -22,6 +22,7 @@ if (-not $OutDir) { $OutDir = Join-Path $root 'dist' }
 $version = Get-WinSeniorVersion
 
 $include = @(
+    'WinSenior.cmd', 'WinSenior.Gui.ps1',
     'WinSenior.ps1', 'WinSenior.Common.ps1', 'WinSenior.UI.ps1', 'WinSenior.Schedule.ps1',
     'Cleanup-Windows-Senior.ps1', 'Optimize-Windows-Senior.ps1', 'Repair-Windows-Senior.ps1',
     'Cleanup-Windows-Senior.bat', 'README.md', 'LICENSE', 'CHANGELOG.md'

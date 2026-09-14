@@ -1,7 +1,7 @@
 # Windows System Cleaner and Optimizer 🧹
 
 [![CI](https://github.com/denfry/WindowsCleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/denfry/WindowsCleaner/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-6.1.0-blue.svg)](https://github.com/denfry/WindowsCleaner)
+[![Version](https://img.shields.io/badge/version-6.2.0-blue.svg)](https://github.com/denfry/WindowsCleaner)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![PowerShell](https://img.shields.io/badge/powershell-5.1%2B%20%7C%207%2B-blue.svg)](https://learn.microsoft.com/powershell/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](https://www.microsoft.com/windows/)
@@ -10,7 +10,7 @@
 > a small engine resolves what to run, reclaims disk space, and deletes through
 > PowerShell's `ShouldProcess` — so **`-WhatIf` is real**, not a parallel code path.
 
-It cleans 63 targets across browsers, developer tools, apps, games, system caches, every
+It cleans 97 targets across browsers, developer tools, apps, games, system caches, every
 local disk, logs, Windows Update, and driver leftovers — all from one declarative registry
 with a real dry-run mode and a hard safety guard. A companion optimization engine applies
 49 reversible system tweaks, a troubleshooting engine scans for 25 common problems and
@@ -23,7 +23,8 @@ safety net. Works on desktops, laptops, and Windows Server, and runs unattended 
 
 ## Contents
 
-- [The menu — one command](#one-command--the-menu)
+- [Desktop app — one command](#one-command--the-desktop-app)
+- [The console menu](#the-console-menu)
 - [Highlights](#highlights)
 - [Quick start](#quick-start)
 - [Parameters](#parameters)
@@ -37,9 +38,45 @@ safety net. Works on desktops, laptops, and Windows Server, and runs unattended 
 - [Common issues (FAQ)](#common-issues-faq)
 - [License](#license)
 
-## One command — the menu
+## One command — the desktop app
 
-`WinSenior.ps1` is the single entry point. Run it (it self-elevates) and an interactive
+Clone, run one file, done. Nothing is downloaded or installed: the window is WPF, which
+ships with every Windows 10/11.
+
+```powershell
+git clone https://github.com/denfry/WindowsCleaner
+cd WindowsCleaner
+.\WinSenior.cmd          # or double-click it in Explorer
+```
+
+`WinSenior.cmd` removes the Mark-of-the-Web from the scripts (zip downloads), asks for
+Administrator once (UAC) and opens **Windows Senior** without a console window.
+`.\WinSenior.ps1 -Gui` does the same from PowerShell; `.\WinSenior.cmd console` opens
+the arrow-key menu instead.
+
+The app has six pages:
+
+- **Disk cleanup** — every task with its category and risk badge. *Scan* runs the real
+  `-WhatIf` dry run and fills a "Would free" column per task; *Clean now* runs the checked
+  tasks. Options: current user only, restore point, delete locked files at reboot, skip
+  SFC/DISM, minimum file age. Dangerous tasks are never pre-checked and ask for confirmation.
+- **Optimize** — all tweaks with their live *applied / not applied* state; preview or apply,
+  restore point first, every applied tweak is backed up.
+- **Troubleshoot** — read-only scan with OK / Warn / Fail per check and the detail text;
+  tick the problems to repair and press *Fix selected*, or auto-fix everything.
+- **Undo & restore** — list of optimization backup manifests (undo newest or a chosen one),
+  create a System Restore point, open System Restore, open log folders.
+- **Schedule** — install/remove the recurring Task Scheduler jobs and see their next run.
+- **About** — versions, counts, paths.
+
+Engine output streams into the log panel at the bottom (resizable, saveable, cancellable).
+The app never re-implements deletion: it launches the same engine scripts with parameters,
+so `-WhatIf`, the safety guard, restore points and undo are exactly the ones documented below.
+Selections and options persist in `%ProgramData%\WinSenior\gui-settings.json`.
+
+## The console menu
+
+`WinSenior.ps1` is the console entry point. Run it (it self-elevates) and an interactive
 menu opens with detailed screens for cleanup, optimization, troubleshooting, undo, a
 restore point and a task/tweak/check listing. It drives all three engines, so every action
 keeps real `-WhatIf`, the safety guard and per-tweak undo.
@@ -63,7 +100,12 @@ characters (ASCII `+ - |` borders instead).
 - **Real restore point.** `Checkpoint-Computer` actually creates a System Restore point
   (and clears the 24-hour throttle first) — non-interactive, safe for automation.
 - **Honest accounting.** Reclaimed bytes are summed from items that were actually
-  removed, not estimated and not counted from log lines.
+  removed, not estimated and not counted from log lines. Partially-deleted folders count
+  only what actually went away.
+- **Locked files don't win.** `-DeferLocked` queues anything in use for deletion at the
+  next reboot through `MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)` — the same mechanism
+  Windows Installer uses — instead of reporting an error. Age-filtered runs also prune the
+  empty folder skeletons they leave behind.
 - **A safety guard that can't be argued with.** `Test-SafeToDelete` refuses to operate on
   drive roots, `%WINDIR%`, `%USERPROFILE%`, `C:\Users`, `System32`, or any path shallower
   than two levels — defends against a bad registry entry or an unexpanded variable.
@@ -115,6 +157,7 @@ Run as Administrator. PowerShell 5.1+ (7+ recommended).
 | `-NoRestorePoint` | `-nrp` | Skip the restore point that is otherwise created first |
 | `-SkipOptimization` | `-so` | Skip the slow SFC / DISM category |
 | `-MaxAgeDays <n>` | | Only delete files older than n days |
+| `-DeferLocked` | `-dl` | Locked/in-use files are scheduled for deletion at next reboot (MoveFileEx) instead of counted as errors |
 | `-LogPath <path>` | | Text log (default `%TEMP%\WindowsCleanup.log`) |
 | `-ReportPath <path>` | | Write a machine-readable JSON report |
 | `-ListTasks` | | Print the task registry and exit |
@@ -139,17 +182,35 @@ task on regardless of tier.
 - **Browsers** — Chrome, Edge, Firefox, Opera, Yandex, Brave (all profiles, cache /
   code cache / GPU cache / service-worker cache).
 - **DevTools** — npm, pip, Yarn, NuGet http cache, Gradle, VS Code, JetBrains
-  (caches/logs/temp), Nuitka build cache, Go build cache, Dart/Flutter Pub cache,
-  package-manager caches (winget, Chocolatey, Scoop, conda, cargo, Go module cache),
-  `pnpm store prune`, and `docker system prune` (each skipped if the tool isn't installed).
-- **Apps** — Windows app/UWP caches, Microsoft Teams (classic + new), Discord, Slack,
-  Spotify, Office document/web cache, OneDrive logs, Adobe media & Camera Raw cache.
-- **Games** — launcher caches for Steam (shader/http/html), Epic, Battle.net, GOG.
-- **System** — user/Windows temp, WinINet cache, thumbnail & icon cache, GPU/D3D shader
-  cache, GPU driver installer leftovers (NVIDIA/AMD), WebCache, Delivery Optimization,
-  recent items, font cache, Windows logs, prefetch, and removal of superseded driver
-  packages via pnputil (Dangerous; boot-critical and in-use drivers are never touched).
-- **Logs** additions — setup logs (Panther/setupapi) and Defender scan history.
+  (caches/logs/temp), Visual Studio (ComponentModelCache, IntelliCode logs, telemetry),
+  Nuitka, Go build cache, Dart/Flutter Pub cache, package-manager caches (winget, Chocolatey,
+  Scoop, conda, cargo, Go module cache), Python tools (uv, poetry, pipx, pyenv), JVM
+  wrappers (Maven/Gradle dists, sbt boot, kotlin daemon), .NET SDK temp & telemetry, Node
+  toolchain (node-gyp, electron, bun, deno, Cypress), GitHub Desktop, Composer, Docker
+  Desktop/WSL logs, `pnpm store prune`, `docker system prune`, and — off by default — ML model
+  & browser-automation caches (HuggingFace, torch, Playwright, Puppeteer).
+- **Apps** — Windows app/UWP caches & temp state, Microsoft Teams (classic + new), Discord,
+  Slack, Spotify, Telegram, WhatsApp, Zoom/Skype/Signal/Viber, a generic sweep of every
+  Electron/Chromium app cache under AppData (Moderate), media players (VLC, WMP, Plex), Office
+  document/web cache, OneDrive logs, Adobe media & Camera Raw cache, RDP bitmap cache,
+  notification image cache, GPU vendor apps (NVIDIA App / GeForce Experience / AMD / Intel).
+- **Games** — launcher caches for Steam (shader/http/html), Epic, Battle.net, GOG; launcher
+  logs & crash dumps (Steam, Epic, EA, Ubisoft, Riot, Xbox); engine caches (Unreal DDC, Unity,
+  Godot); per-game shader caches on every disk (Aggressive).
+- **System** — user/Windows temp, service-account temps (LocalService / NetworkService /
+  system profile), WinINet cache, thumbnail & icon cache, GPU/D3D shader cache, GPU driver
+  installer leftovers (NVIDIA/AMD), WebCache, Delivery Optimization, BITS transfer queue,
+  setup/upgrade/servicing logs (Panther, CBS, USO, WindowsUpdate.log), Offline Web Pages,
+  Defender scan cache, PerfLogs, recent items, font cache, Windows logs, prefetch, DNS/ARP/
+  NetBIOS flush, silent Store cache reset, standby-memory purge (frees RAM), Windows Search
+  index rebuild (Aggressive, off by default), and removal of superseded driver packages via
+  pnputil (Dangerous; boot-critical and in-use drivers are never touched).
+- **Logs** additions — setup logs (Panther/setupapi), Defender scan history, diagnostics &
+  telemetry caches (Diagnosis, ETL traces, SleepStudy, WDI), third-party app logs (Adobe,
+  Autodesk, Corsair, Logitech, Razer, Intel, PowerToys, Terminal), installer leftovers (MSI
+  temp, Squirrel/NSIS/Inno, Chrome/Edge updater downloads), empty-folder pruning in temp.
+- **Updates** additions (Dangerous, off by default) — disable hibernation & delete
+  `hiberfil.sys`; delete all but the newest restore point / shadow copy.
 - **Disks** — drive-level cleanup across **every local disk** (C:, D:, E: …): per-drive
   `Temp`/`tmp` scratch folders and CHKDSK `FOUND.*` fragments. Recycle Bins on all drives
   are emptied by the Logs task. Restrict with `-Drives C,D`.
@@ -286,7 +347,7 @@ Every engine's `-ReportPath` writes the same envelope, so one parser reads them 
 
 ```json
 {
-  "Tool": "WinSenior", "Version": "6.1.0", "Engine": "Cleanup",
+  "Tool": "WinSenior", "Version": "6.2.0", "Engine": "Cleanup",
   "Host": "PC01", "Timestamp": "2026-06-24T03:00:11", "Mode": "Live",
   "RestorePoint": true, "DurationSec": 42.3,
   "Summary": { "TotalFreed": "1.20 GB", "TotalFiles": 8123, "TotalErrors": 2 },
