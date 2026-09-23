@@ -285,7 +285,9 @@ Describe 'WinSenior.cmd launcher' {
             while (-not (Test-Path -LiteralPath $marker) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 250 }
             Test-Path -LiteralPath $marker | Should -BeTrue
             $got = [IO.File]::ReadAllText($marker)
-            $got | Should -Be ("{0}|True" -f (Join-Path $dir 'WinSenior.Gui.ps1'))
+            # %TEMP% may be an 8.3 short path (CI: C:\Users\RUNNER~1) while cmd reports the
+            # long one, so compare from the folder name down.
+            $got | Should -BeLike ("*\{0}\WinSenior.Gui.ps1|True" -f (Split-Path $dir -Leaf))
         }
         finally { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }
     }
