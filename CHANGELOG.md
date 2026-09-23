@@ -4,6 +4,96 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.0] - 2026-09-23
+
+A correctness and safety release: every engine was audited against Microsoft's
+documentation and the common ways cleaners and tweakers break Windows.
+
+### Fixed
+- **The desktop app ignored the tick-boxes.** It passed `-Include 'a,b,c'` through `-File`,
+  which arrives as one string, so every run used the engine defaults. All engines now split
+  comma-joined `-Include` / `-Exclude` (and `-Drives`, `-Area`).
+- **No restore point under PowerShell 7** (the app's preferred host): `Checkpoint-Computer`
+  does not exist there. Restore points now go through the `SystemRestore` WMI class on both
+  hosts, and the 24-hour throttle value is put back afterwards instead of being left at 0.
+- **Cleanup dry runs measured nothing for per-user paths**: `ForEach-Object <member>` is
+  itself subject to `-WhatIf`, so `<USER>` expanded to nothing in preview mode.
+- **Junctions / symlinks**: a link inside a cleaned folder is now removed as a link; its
+  target is never enumerated, counted or queued for delete-at-reboot.
+- **Age filter** works on files, not folders (a folder's timestamp does not change when a
+  file deep inside it does, so fresh files could be deleted with `-MaxAgeDays`).
+- Services stopped for a task also restart their **dependents** (`cryptsvc` → AppLocker's
+  `AppIDSvc` stayed off until reboot); a task is skipped if its service refuses to stop.
+- Native tools (DISM, sfc, powercfg, pnputil, wevtutil) are judged by **exit code**; failures
+  were logged as success. 3010 = success, reboot required.
+- The engine no longer deletes **its own log / report** or the desktop app's capture files
+  out of `%TEMP%` mid-run.
+- Browsers are closed **only in the current session**, and never by a silent scheduled run
+  (`-CloseApps` makes that explicit; otherwise running browsers' caches are skipped).
+- Recycle Bin is emptied for **every user on every disk** with byte accounting
+  (`Clear-RecycleBin` only emptied the caller's bin — nothing when running as SYSTEM).
+- Event-log archives go to `%ProgramData%\WinSenior\eventlogs` (the temp tasks deleted them)
+  and a log is only cleared after a successful export.
+- `shadow-old` only prunes system-drive restore-point shadows (it also deleted other
+  volumes' and backup software's shadows); `old-drivers` groups by provider + class + inf.
+- `gpu-leftovers` only targets installer extraction folders, not any `NVIDIA`/`AMD` folder
+  on a data disk; `disk-temp` only removes week-old files.
+- `cmd.exe` mis-resolved `call :label` in LF-only batch files (the `.bat` skipped Chrome and
+  ran its tail twice); the release build now forces CRLF on scripts.
+- Repair: `disk-dirty` flagged every volume (`fsutil dirty query` exits 0 either way),
+  `def-signatures` never saw threats, `time-sync` used an invalid `w32tm` switch, ICMP being
+  blocked triggered a full network reset, the hosts fix wiped the whole file, the BITS fix
+  cancelled healthy jobs, and fixes were reported as *Fixed* without checking — every fix is
+  now verified by re-scanning.
+- Optimize: `TaskbarDa` (blocked by UCPD on current Windows 11) aborted the whole taskbar
+  tweak; `SystemResponsiveness=0` is clamped to 20 by MMCSS; Teredo is disabled through its
+  own policy instead of killing every IPv6 tunnel; the Ultimate plan no longer piles up a new
+  copy per run; Appx debloat actually works under PowerShell 7; undo manifests are written
+  after every tweak (a cancelled run stays undoable) and marked when undone.
+
+### Changed (defaults, per Microsoft guidance)
+- Off by default: Prefetch (slows the next boots), standby-memory purge, full
+  SoftwareDistribution reset (wipes update history), BITS queue reset, Store reset,
+  background-app block, WAP Push service, GameDVR policy, network throttling.
+- `DISM /ResetBase` moved to the Dangerous tier (updates become permanently uninstallable);
+  `/SPSuperseded` (Windows 7-era) removed. `catroot2` and Defender folders are no longer
+  treated as cache. Recent items no longer wipes pinned jump lists / Quick Access pins
+  (separate opt-in `jumplists` task). Update caches are skipped while an update waits for a reboot.
+- Scheduled runs are installed into `%ProgramFiles%\WinSenior` (admins-only) instead of
+  running a user-writable clone as SYSTEM, and keep one report per run.
+
+### Added
+- **One-line install** — `irm https://github.com/denfry/WindowsCleaner/releases/latest/download/install.ps1 | iex`
+  downloads the latest release, verifies its SHA256, installs to `%LOCALAPPDATA%\WinSenior`,
+  adds Start menu / desktop shortcuts and starts the app. Re-run to update; `-Uninstall`,
+  `-NoLaunch`, `-Console`, `-NoShortcut` via the scriptblock form. Uses only .NET for
+  download / hash / unzip, so it works on any Windows PowerShell 5.1 or PowerShell 7.
+- **Cleanup 97 → 106:** Vivaldi, new Teams, WebView2 hosts (new Outlook, Widgets, Copilot),
+  Office Click-to-Run update payloads, `Windows\SystemTemp`, upgrade-assistant leftovers,
+  Chrome's 4 GB on-device AI model (opt-in), NuGet global packages (opt-in), jump lists
+  (opt-in); Chromium shader/component/crash caches, Steam libraries on every disk
+  (`libraryfolders.vdf`), nested LiveKernelReports dumps, legacy NVIDIA LocalLow caches;
+  Delivery Optimization is emptied through `Delete-DeliveryOptimizationCache`.
+- **Optimize 49 → 77:** Recall removal, Copilot app removal, Paint/Notepad AI, Bing search
+  suggestions and search highlights, widgets/feeds/Meet Now policies, Edge startup boost /
+  background mode / sidebar / shopping, Chrome on-device AI download block, language-list
+  and settings-page ads, suggested actions, Sticky Keys prompt, End task in taskbar,
+  Home/Gallery in Explorer, HAGS, power throttling, USB selective suspend, reserved storage
+  and more (debatable ones off by default). Visual effects keep font smoothing.
+- **Troubleshoot 25 → 43:** services disabled by tweak tools, Windows Update blocked by
+  policy, update-failure history with per-error-code routing, broken Start/taskbar shell
+  packages, WinRE disabled / recovery partition too small (0x80070643), Secure Boot 2023
+  certificate status, page file, Winsock LSP, disabled network adapters, BitLocker
+  suspended, UAC off, broken PATH/TEMP, Driver Verifier left on, activation, TRIM, root
+  certificate updates, Search index health, suspicious Defender exclusions.
+- **Desktop app:** Startup apps page (enable/disable exactly like Task Manager, fully
+  reversible), History page with all-time total and HTML export, progress bar, filter box
+  and sortable columns on every list, tooltips with paths / explanations, confirm dialogs
+  before Clean and Apply, drive and Conservative options, single-instance guard, no more
+  silent crashes (errors land in the log and `logs\gui-crash.log`), UTF-8 engine output
+  (no mojibake on non-English Windows), scrollable pages.
+- `WinSenior.cmd` works from folders containing spaces, `)`, `&`, `'` or Cyrillic.
+
 ## [6.2.0] - 2026-09-14
 
 ### Added

@@ -163,6 +163,89 @@ Describe 'v6.2 coverage & mechanisms' {
     }
 }
 
+Describe 'v6.3 safety & coverage' {
+    It 'moves irreversible / counter-productive tasks off the default path' {
+        ($script:Reg | Where-Object Id -eq 'dism-resetbase').Risk | Should -Be 'Dangerous'
+        foreach ($id in 'prefetch', 'memory-standby', 'wu-full', 'bits-cache', 'store-reset', 'component-task', 'jumplists') {
+            ($script:Reg | Where-Object Id -eq $id).DefaultOn | Should -BeFalse -Because $id
+        }
+    }
+    It 'no longer treats catroot2 or Defender folders as cache' {
+        ($script:Reg | Where-Object Id -eq 'wu-cache').Paths -join ';' | Should -Not -Match 'catroot2'
+        ($script:Reg.Paths | Where-Object { $_ -match 'Windows Defender' }) | Should -BeNullOrEmpty
+    }
+    It 'keeps jump-list pins and Quick Access pins out of the recent-items task' {
+        ($script:Reg | Where-Object Id -eq 'recent').Paths | Should -Be @('<USER>\AppData\Roaming\Microsoft\Windows\Recent\*.lnk')
+        ($script:Reg | Where-Object Id -eq 'jumplists').Exclude | Should -Contain 'f01b4d95cf55d32a*'
+    }
+    It 'adds the new targets' {
+        $ids = 'vivaldi','chrome-ai-model','teams-new','webview2','office-c2r','nuget-global','systemtemp','upgrade-leftovers'
+        @($script:Reg | Where-Object Id -in $ids).Count | Should -Be $ids.Count
+    }
+    It 'maps every browser task to the process that locks it' {
+        ($script:Reg | Where-Object { $_.Category -eq 'Browsers' -and -not $_.Processes }) | Should -BeNullOrEmpty
+    }
+    It 'expands <STEAM> only to Steam roots that exist' {
+        @(Expand-TaskPath @('<STEAM>\logs\*')) | ForEach-Object { Test-Path -LiteralPath (Split-Path (Split-Path $_)) | Should -BeTrue }
+    }
+    It 'splits a comma-joined -Include passed through -File' {
+        . $script:Sut -Include 'chrome, edge' -Exclude 'firefox'
+        $Include | Should -Be @('chrome', 'edge')
+        $Exclude | Should -Be @('firefox')
+    }
+    It 'treats a native non-zero exit code as failure and 3010 as success' {
+        Mock Write-CleanupLog { }
+        $WhatIfPreference = $false
+        Invoke-NativeStep 'fail' { & cmd.exe /c exit 1 }    | Should -BeFalse
+        Invoke-NativeStep 'reboot' { & cmd.exe /c exit 3010 } | Should -BeTrue
+        Invoke-NativeStep 'ok' { & cmd.exe /c exit 0 }        | Should -BeTrue
+    }
+}
+
+Describe 'Invoke-PathCleanup (live, temp sandbox)' {
+    BeforeEach {
+        $script:Box = Join-Path ([System.IO.Path]::GetTempPath()) ("pester_live_{0}" -f (Get-Random))
+        New-Item -ItemType Directory -Path "$script:Box\clean", "$script:Box\outside" -Force | Out-Null
+    }
+    AfterEach {
+        Get-ChildItem -LiteralPath "$script:Box\clean" -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint } |
+            ForEach-Object { [IO.Directory]::Delete($_.FullName, $false) }
+        Remove-Item -LiteralPath $script:Box -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    It 'removes a junction without touching (or counting) its target' {
+        Set-Content -Path "$script:Box\outside\precious.txt" -Value ('x' * 5000)
+        New-Item -ItemType Junction -Path "$script:Box\clean\link" -Target "$script:Box\outside" | Out-Null
+        $WhatIfPreference = $false
+        $r = Invoke-PathCleanup -Path "$script:Box\clean\*" -Description 'pester'
+        Test-Path -LiteralPath "$script:Box\outside\precious.txt" | Should -BeTrue
+        Test-Path -LiteralPath "$script:Box\clean\link" | Should -BeFalse
+        $r.Bytes | Should -Be 0
+    }
+    It 'ages FILES, not folders: fresh files inside an old folder survive' {
+        New-Item -ItemType Directory -Path "$script:Box\clean\old" -Force | Out-Null
+        Set-Content -Path "$script:Box\clean\old\stale.txt" -Value 'a'
+        Set-Content -Path "$script:Box\clean\old\fresh.txt" -Value 'b'
+        (Get-Item "$script:Box\clean\old\stale.txt").LastWriteTime = (Get-Date).AddDays(-30)
+        (Get-Item "$script:Box\clean\old").LastWriteTime = (Get-Date).AddDays(-30)
+        $WhatIfPreference = $false
+        $r = Invoke-PathCleanup -Path "$script:Box\clean\*" -AgeDays 7 -Description 'pester'
+        Test-Path -LiteralPath "$script:Box\clean\old\fresh.txt" | Should -BeTrue
+        Test-Path -LiteralPath "$script:Box\clean\old\stale.txt" | Should -BeFalse
+        $r.Files | Should -Be 1
+    }
+    It 'keeps excluded names and the files the engine itself is writing' {
+        Set-Content -Path "$script:Box\clean\Layout.ini" -Value 'keep'
+        Set-Content -Path "$script:Box\clean\winsenior-gui-123.json" -Value 'keep'
+        Set-Content -Path "$script:Box\clean\junk.tmp" -Value 'drop'
+        $WhatIfPreference = $false
+        $null = Invoke-PathCleanup -Path "$script:Box\clean\*" -ExcludePattern 'Layout.ini' -Description 'pester'
+        Test-Path -LiteralPath "$script:Box\clean\Layout.ini" | Should -BeTrue
+        Test-Path -LiteralPath "$script:Box\clean\winsenior-gui-123.json" | Should -BeTrue
+        Test-Path -LiteralPath "$script:Box\clean\junk.tmp" | Should -BeFalse
+    }
+}
+
 Describe 'Remove-EmptyDirectory' {
     BeforeAll {
         $script:Tmp2 = Join-Path ([System.IO.Path]::GetTempPath()) ("pester_empty_{0}" -f (Get-Random))

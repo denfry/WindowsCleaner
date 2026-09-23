@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 :: ============================================================
 ::  Windows System Cleanup Script (Batch Version)
-::  Version: 6.0  - mirrors the PowerShell engine's defaults
+::  Version: 6.3.0  - mirrors the PowerShell engine's defaults
 ::  - per-profile helper (cleans every user profile)
 ::  - independent per-browser flags
 ::  - safe targets: dev / messenger / shader / font caches
@@ -12,7 +12,7 @@ setlocal enabledelayedexpansion
 ::  Author: denfry  -  https://github.com/denfry/WindowsCleaner
 :: ============================================================
 
-set "SCRIPT_VERSION=6.0"
+set "SCRIPT_VERSION=6.3.0"
 set "SCRIPT_NAME=Cleanup-Windows-Senior.bat"
 
 :: ---------- defaults (aggressive, matching the PS engine) ----------
@@ -31,7 +31,8 @@ set "CLEAN_BRAVE=1"
 
 set "CLEAN_TEMP=1"
 set "CLEAN_THUMBNAILS=1"
-set "CLEAN_PREFETCH=1"
+:: Prefetch is opt-in (/pf): Microsoft notes clearing it slows the next boots.
+set "CLEAN_PREFETCH=0"
 set "CLEAN_SHADERCACHE=1"
 set "CLEAN_FONTCACHE=1"
 set "CLEAN_DEVCACHE=1"
@@ -77,6 +78,7 @@ if /i "!A!"=="/nya"           ( set "CLEAN_YANDEX=0" & goto :NEXT )
 if /i "!A!"=="/nbr"           ( set "CLEAN_BRAVE=0" & goto :NEXT )
 if /i "!A!"=="/ntmp"          ( set "CLEAN_TEMP=0" & goto :NEXT )
 if /i "!A!"=="/npf"           ( set "CLEAN_PREFETCH=0" & goto :NEXT )
+if /i "!A!"=="/pf"            ( set "CLEAN_PREFETCH=1" & goto :NEXT )
 if /i "!A!"=="/nrb"           ( set "CLEAN_RECYCLE_BIN=0" & goto :NEXT )
 if /i "!A!"=="/nwu"           ( set "CLEAN_WU=0" & goto :NEXT )
 if /i "!A!"=="/ndev"          ( set "CLEAN_DEVCACHE=0" & goto :NEXT )
@@ -157,16 +159,20 @@ if "%CLEAN_IIS_LOGS%"=="1" if exist "%WINDIR%\System32\LogFiles" (
 if "%CLEAN_WU%"=="1" (
     call :LOG "Cleaning Windows Update cache..."
     if "%DRY_RUN%"=="1" (
-        call :LOG "[DRY] would stop wuauserv/bits/cryptsvc and wipe SoftwareDistribution + catroot2"
+        call :LOG "[DRY] would stop wuauserv/bits and wipe SoftwareDistribution\Download"
     ) else (
-        net stop wuauserv >nul 2>&1
-        net stop bits >nul 2>&1
-        net stop cryptsvc >nul 2>&1
-        call :WIPE "%WINDIR%\SoftwareDistribution"
-        call :WIPE "%WINDIR%\System32\catroot2"
-        net start cryptsvc >nul 2>&1
-        net start bits >nul 2>&1
-        net start wuauserv >nul 2>&1
+        rem Download cache only: DataStore is update history and catroot2 is a repair
+        rem step, not a cache. Skip while an update waits for a reboot.
+        reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired" >nul 2>&1
+        if !errorlevel! equ 0 (
+            call :LOG_WARN "Update waiting for a reboot - Windows Update cache skipped (restart first)"
+        ) else (
+            net stop wuauserv >nul 2>&1
+            net stop bits >nul 2>&1
+            call :WIPE "%WINDIR%\SoftwareDistribution\Download"
+            net start bits >nul 2>&1
+            net start wuauserv >nul 2>&1
+        )
     )
 )
 
@@ -175,12 +181,10 @@ if "%SKIP_OPTIMIZATION%"=="0" (
     if "%OPTIMIZE_COMPONENTS%"=="1" (
         call :LOG "DISM component cleanup..."
         if "%DRY_RUN%"=="1" (
-            call :LOG "[DRY] would run DISM /StartComponentCleanup and /SPSuperseded"
+            call :LOG "[DRY] would run DISM /StartComponentCleanup"
         ) else (
             Dism.exe /online /Cleanup-Image /StartComponentCleanup /Quiet >nul 2>&1
-            Dism.exe /online /Cleanup-Image /SPSuperseded >nul 2>&1
-            call :WIPE "%WINDIR%\Logs\DISM"
-            call :LOG_OK "Component store optimized"
+            if !errorlevel! equ 0 ( call :LOG_OK "Component store optimized" ) else if !errorlevel! equ 3010 ( call :LOG_OK "Component store optimized (reboot to finish)" ) else ( call :LOG_WARN "DISM component cleanup failed (exit !errorlevel!)" )
         )
     )
     if "%RUN_SFC%"=="1" (
@@ -368,6 +372,7 @@ echo.
 echo   Disable a target: /nch /ned /nff /nop /nya /nbr  (browsers)
 echo                     /ntmp /npf /nrb /nwu /ndev /nmsg /ndisks
 echo.
+echo   Enable an opt-in target: /pf  (Prefetch - slows the next boots while it rebuilds)
 echo   /ndisks disables drive-level cleanup of all local disks (C:, D:, ...)
 echo.
 echo NOTE: requires Administrator. The PowerShell version
