@@ -42,39 +42,54 @@ Describe 'New-WinSeniorRestorePoint' {
     # scope here does NOT survive the closure's module boundary under Pester 5 (the
     # variable reads back as $null inside the scriptblock), so keep it function-local.
     It 'is a no-op under -WhatIf and never checkpoints' {
-        Mock Checkpoint-Computer { }
+        Mock Invoke-WsCheckpoint { }
         $captured = [System.Collections.Generic.List[string]]::new()
         $logger = { param($m, $l) $captured.Add("$l|$m") }.GetNewClosure()
         $WhatIfPreference = $true
         $r = New-WinSeniorRestorePoint -Description 'test' -LogAction $logger
         $r | Should -Be 'WhatIf'
         ($captured -join "`n") | Should -Match 'would create a System Restore point'
-        Should -Invoke Checkpoint-Computer -Times 0 -Exactly
+        Should -Invoke Invoke-WsCheckpoint -Times 0 -Exactly
     }
 
     It 'returns Created and checkpoints once on success' {
-        Mock New-ItemProperty    { }
-        Mock Enable-ComputerRestore { }
-        Mock Checkpoint-Computer  { }
+        Mock Set-WsRestoreThrottle { }
+        Mock Enable-WsSystemRestore { }
+        Mock Invoke-WsCheckpoint  { }
         $captured = [System.Collections.Generic.List[string]]::new()
         $logger = { param($m, $l) $captured.Add("$l|$m") }.GetNewClosure()
         $WhatIfPreference = $false
         $r = New-WinSeniorRestorePoint -Description 'test' -LogAction $logger
         $r | Should -Be 'Created'
-        Should -Invoke Checkpoint-Computer -Times 1 -Exactly
+        Should -Invoke Invoke-WsCheckpoint -Times 1 -Exactly
         ($captured -join "`n") | Should -Match 'System Restore point created'
     }
 
     It 'returns Failed when the checkpoint throws' {
-        Mock New-ItemProperty    { }
-        Mock Enable-ComputerRestore { }
-        Mock Checkpoint-Computer  { throw 'protection off' }
+        Mock Set-WsRestoreThrottle { }
+        Mock Enable-WsSystemRestore { }
+        Mock Invoke-WsCheckpoint  { throw 'protection off' }
         $captured = [System.Collections.Generic.List[string]]::new()
         $logger = { param($m, $l) $captured.Add("$l|$m") }.GetNewClosure()
         $WhatIfPreference = $false
         $r = New-WinSeniorRestorePoint -Description 'test' -LogAction $logger
         $r | Should -Be 'Failed'
         ($captured -join "`n") | Should -Match 'Restore point not created'
+    }
+}
+
+Describe 'Write-WinSeniorReport {timestamp}' {
+    It 'writes one file per run and reuses the stamp when the report is rewritten' {
+        $dir = Join-Path ([IO.Path]::GetTempPath()) ("pester_rep_{0}" -f (Get-Random))
+        $script:WsReportStamp = $null
+        $WhatIfPreference = $false
+        Write-WinSeniorReport -ReportPath (Join-Path $dir 'repair-{timestamp}.json') -Engine Repair
+        Write-WinSeniorReport -ReportPath (Join-Path $dir 'repair-{timestamp}.json') -Engine Repair
+        $files = @(Get-ChildItem -LiteralPath $dir -Filter 'repair-*.json')
+        $files.Count | Should -Be 1
+        $files[0].Name | Should -Match '^repair-\d{8}-\d{6}\.json$'
+        Get-ChildItem -LiteralPath $dir -File | ForEach-Object { [IO.File]::Delete($_.FullName) }
+        [IO.Directory]::Delete($dir)
     }
 }
 

@@ -1,7 +1,7 @@
 # Windows System Cleaner and Optimizer 🧹
 
 [![CI](https://github.com/denfry/WindowsCleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/denfry/WindowsCleaner/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-6.2.0-blue.svg)](https://github.com/denfry/WindowsCleaner)
+[![Version](https://img.shields.io/badge/version-6.3.0-blue.svg)](https://github.com/denfry/WindowsCleaner)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![PowerShell](https://img.shields.io/badge/powershell-5.1%2B%20%7C%207%2B-blue.svg)](https://learn.microsoft.com/powershell/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](https://www.microsoft.com/windows/)
@@ -10,10 +10,10 @@
 > a small engine resolves what to run, reclaims disk space, and deletes through
 > PowerShell's `ShouldProcess` — so **`-WhatIf` is real**, not a parallel code path.
 
-It cleans 97 targets across browsers, developer tools, apps, games, system caches, every
+It cleans 106 targets across browsers, developer tools, apps, games, system caches, every
 local disk, logs, Windows Update, and driver leftovers — all from one declarative registry
 with a real dry-run mode and a hard safety guard. A companion optimization engine applies
-49 reversible system tweaks, a troubleshooting engine scans for 25 common problems and
+77 reversible system tweaks, a troubleshooting engine scans for 43 common problems and
 repairs them, and a single menu ties everything together.
 
 A free, open-source **Windows 10 and Windows 11 cleaner, debloater, and optimizer**, written
@@ -40,8 +40,34 @@ safety net. Works on desktops, laptops, and Windows Server, and runs unattended 
 
 ## One command — the desktop app
 
-Clone, run one file, done. Nothing is downloaded or installed: the window is WPF, which
-ships with every Windows 10/11.
+Open **PowerShell** (Win + X → *Terminal* / *Windows PowerShell*) and paste one line:
+
+```powershell
+irm https://github.com/denfry/WindowsCleaner/releases/latest/download/install.ps1 | iex
+```
+
+That's it — no git, no zip, no admin prompt to install. The installer:
+
+1. reads the latest release's `SHA256SUMS.txt`, downloads the zip over HTTPS and **refuses
+   to install if the SHA256 does not match**;
+2. puts the app in `%LOCALAPPDATA%\WinSenior\app` and adds **Windows Senior** to the Start
+   menu and the desktop;
+3. starts the app, which asks for Administrator once (UAC).
+
+Run the same line again to **update**. Options (the long form accepts parameters):
+
+```powershell
+$i = [scriptblock]::Create((irm https://github.com/denfry/WindowsCleaner/releases/latest/download/install.ps1))
+& $i -NoLaunch        # install / update only
+& $i -Console         # open the arrow-key console menu instead of the app
+& $i -NoShortcut      # no Start menu / desktop shortcuts
+& $i -Uninstall       # remove the app and its shortcuts
+```
+
+Prefer to read before running? Download `install.ps1` from the
+[latest release](https://github.com/denfry/WindowsCleaner/releases/latest) — it is ~200
+readable lines. Or work from a clone: the window is WPF, which ships with every Windows
+10/11, so nothing else is needed.
 
 ```powershell
 git clone https://github.com/denfry/WindowsCleaner
@@ -54,16 +80,22 @@ Administrator once (UAC) and opens **Windows Senior** without a console window.
 `.\WinSenior.ps1 -Gui` does the same from PowerShell; `.\WinSenior.cmd console` opens
 the arrow-key menu instead.
 
-The app has six pages:
+The app has eight pages:
 
 - **Disk cleanup** — every task with its category and risk badge. *Scan* runs the real
   `-WhatIf` dry run and fills a "Would free" column per task; *Clean now* runs the checked
-  tasks. Options: current user only, restore point, delete locked files at reboot, skip
-  SFC/DISM, minimum file age. Dangerous tasks are never pre-checked and ask for confirmation.
+  tasks. Options: current user only, restore point, delete locked files at reboot, close
+  running browsers, skip SFC/DISM, Conservative, minimum file age, which disks. Dangerous
+  tasks are never pre-checked, and *Clean now* shows a confirmation with the estimate first.
+  A filter box, sortable columns and tooltips with each task's paths on every list.
 - **Optimize** — all tweaks with their live *applied / not applied* state; preview or apply,
   restore point first, every applied tweak is backed up.
 - **Troubleshoot** — read-only scan with OK / Warn / Fail per check and the detail text;
   tick the problems to repair and press *Fix selected*, or auto-fix everything.
+- **Startup apps** — everything that starts with Windows (Run keys, Startup folders);
+  untick to disable it exactly the way Task Manager does — the entry is kept, so ticking it
+  again restores it.
+- **History** — every run's report (app and scheduled), all-time total freed, HTML export.
 - **Undo & restore** — list of optimization backup manifests (undo newest or a chosen one),
   create a System Restore point, open System Restore, open log folders.
 - **Schedule** — install/remove the recurring Task Scheduler jobs and see their next run.
@@ -97,8 +129,11 @@ characters (ASCII `+ - |` borders instead).
   (`-ListTasks` prints it). Adding a target is one line; nothing else to wire up.
 - **Real `-WhatIf` / `-DryRun`.** Implemented through `SupportsShouldProcess`. Preview
   shows exactly what would be removed and reports honest would-free totals.
-- **Real restore point.** `Checkpoint-Computer` actually creates a System Restore point
-  (and clears the 24-hour throttle first) — non-interactive, safe for automation.
+- **Real restore point.** The `SystemRestore` WMI class actually creates a System Restore
+  point under both Windows PowerShell 5.1 and PowerShell 7 (the 24-hour throttle is lifted
+  for that one checkpoint and then put back) — non-interactive, safe for automation.
+- **Links are never followed.** A junction or symlink inside a cleaned folder is removed as
+  a link; its target is never enumerated, counted or deleted.
 - **Honest accounting.** Reclaimed bytes are summed from items that were actually
   removed, not estimated and not counted from log lines. Partially-deleted folders count
   only what actually went away.
@@ -239,7 +274,7 @@ run. A real restore point is created first as a second safety net.
 .\Optimize-Windows-Senior.ps1 -Undo
 ```
 
-It covers 49 tweaks across four areas (including modern Windows 11 items — Recall/Copilot,
+It covers 77 tweaks across four areas (including modern Windows 11 items — Recall/Copilot,
 tailored-ads and Spotlight, inking/typing & speech telemetry, and the taskbar/Start ad
 surfaces):
 
@@ -280,7 +315,7 @@ health report, and lets you pick which detected issues to repair. Fixes run thro
 .\Repair-Windows-Senior.ps1 -FixAll -IncludeHeavy -Unattended
 ```
 
-It runs 25 checks across eight categories — including security checks (firewall state, SMBv1,
+It runs 43 checks across eight categories — including security checks (firewall state, SMBv1,
 hosts-file and proxy/PAC hijack, Defender signatures), a System Restore safety-net check, print
 spooler / BITS / Store health, and predictive SSD wear & crash-history reporting, plus the
 originals: system image health (DISM), physical disk SMART
@@ -347,7 +382,7 @@ Every engine's `-ReportPath` writes the same envelope, so one parser reads them 
 
 ```json
 {
-  "Tool": "WinSenior", "Version": "6.2.0", "Engine": "Cleanup",
+  "Tool": "WinSenior", "Version": "6.3.0", "Engine": "Cleanup",
   "Host": "PC01", "Timestamp": "2026-06-24T03:00:11", "Mode": "Live",
   "RestorePoint": true, "DurationSec": 42.3,
   "Summary": { "TotalFreed": "1.20 GB", "TotalFiles": 8123, "TotalErrors": 2 },

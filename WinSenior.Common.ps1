@@ -14,8 +14,15 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.2.0
+    Version : 6.3.0
 #>
+
+# When an engine's stdout is redirected (desktop app, scheduler, CI) emit UTF-8
+# instead of the OEM code page, so non-English text (paths, localized errors)
+# survives the round-trip. An interactive console keeps its own code page.
+try {
+    if ([Console]::IsOutputRedirected) { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false) }
+} catch { Write-Verbose "OutputEncoding: $($_.Exception.Message)" }
 
 # =====================================================================
 # ENVIRONMENT PROBES
@@ -80,6 +87,28 @@ function Write-WsLog {
 #   $script:RestorePointMade flag (set it only on 'Created'). Logging is
 #   delegated through -LogAction so each engine logs in its own voice.
 # =====================================================================
+# Checkpoint-Computer / Enable-ComputerRestore do not exist in PowerShell 7, and the
+# desktop app prefers pwsh - so go through the SystemRestore WMI class, which both
+# runtimes have. Thin wrappers so tests can mock them.
+function Enable-WsSystemRestore {
+    param([string]$Drive)
+    try {
+        Invoke-CimMethod -Namespace root/default -ClassName SystemRestore -MethodName Enable `
+            -Arguments @{ Drive = $Drive } -ErrorAction Stop | Out-Null
+    } catch { Write-Verbose "SystemRestore.Enable: $($_.Exception.Message)" }
+}
+
+function Invoke-WsCheckpoint {
+    param([string]$Description)
+    # RestorePointType 12 = MODIFY_SETTINGS, EventType 100 = BEGIN_SYSTEM_CHANGE
+    $r = Invoke-CimMethod -Namespace root/default -ClassName SystemRestore -MethodName CreateRestorePoint `
+        -Arguments @{ Description = $Description; RestorePointType = [uint32]12; EventType = [uint32]100 } `
+        -ErrorAction Stop
+    if ($r.ReturnValue -ne 0) {
+        throw ("SystemRestore.CreateRestorePoint returned 0x{0:X8} (System Protection may be off)" -f [uint32]$r.ReturnValue)
+    }
+}
+
 function New-WinSeniorRestorePoint {
     param(
         [Parameter(Mandatory)][string]$Description,
@@ -90,14 +119,12 @@ function New-WinSeniorRestorePoint {
         return 'WhatIf'
     }
     & $LogAction 'Creating System Restore point...' 'Safety'
+    # Lift the 24-hour throttle for this one checkpoint, then put the user's setting
+    # back exactly as it was (value or absence) so the system default is not changed.
+    $throttle = Set-WsRestoreThrottle -Value 0
     try {
-        # Clear the 24-hour throttle so a back-to-back run still gets a point.
-        $rk = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
-        New-ItemProperty -Path $rk -Name 'SystemRestorePointCreationFrequency' `
-            -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
-        Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction SilentlyContinue
-        Checkpoint-Computer -Description $Description `
-            -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop
+        Enable-WsSystemRestore -Drive "$env:SystemDrive\"
+        Invoke-WsCheckpoint -Description $Description
         & $LogAction 'System Restore point created' 'Success'
         return 'Created'
     }
@@ -106,6 +133,29 @@ function New-WinSeniorRestorePoint {
         & $LogAction 'Continuing without a restore point (System Protection may be off).' 'Warning'
         return 'Failed'
     }
+    finally { Set-WsRestoreThrottle -Restore $throttle | Out-Null }
+}
+
+# Set (-Value) or restore (-Restore <previous>) SystemRestorePointCreationFrequency.
+# Returns the previous value ($null = was absent). Uses the .NET registry API so the
+# restore path can delete the value without Remove-ItemProperty.
+function Set-WsRestoreThrottle {
+    param([Nullable[int]]$Value, [object]$Restore = 'none')
+    $sub = 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
+    $name = 'SystemRestorePointCreationFrequency'
+    try {
+        $key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($sub, $true)
+        if (-not $key) { return $null }
+        try {
+            $prev = $key.GetValue($name, $null)
+            if ($Restore -ne 'none') {
+                if ($null -eq $Restore) { $key.DeleteValue($name, $false) }
+                else { $key.SetValue($name, [int]$Restore, [Microsoft.Win32.RegistryValueKind]::DWord) }
+            }
+            elseif ($null -ne $Value) { $key.SetValue($name, [int]$Value, [Microsoft.Win32.RegistryValueKind]::DWord) }
+            return $prev
+        } finally { $key.Close() }
+    } catch { Write-Verbose "restore throttle: $($_.Exception.Message)"; return $null }
 }
 
 # =====================================================================
@@ -115,7 +165,7 @@ function New-WinSeniorRestorePoint {
 #   DurationSec; engine-specific counters go in Summary, the per-unit list
 #   in Items. No-op without -ReportPath.
 # =====================================================================
-function Get-WinSeniorVersion { '6.2.0' }
+function Get-WinSeniorVersion { '6.3.0' }
 
 function Write-WinSeniorReport {
     param(
@@ -128,6 +178,24 @@ function Write-WinSeniorReport {
         [scriptblock]$LogAction
     )
     if (-not $ReportPath) { return }
+    # '{timestamp}' in the path gives every run its own file (scheduled runs keep a
+    # history instead of overwriting one report). Resolved once per process so an
+    # engine that rewrites its report (Repair: after scan, again after fixes) keeps
+    # a single file. Only the newest 60 files of that pattern are kept.
+    if ($ReportPath -like '*{timestamp}*') {
+        if (-not $script:WsReportStamp) { $script:WsReportStamp = (Get-Date).ToString('yyyyMMdd-HHmmss') }
+        $pattern    = [IO.Path]::GetFileName($ReportPath).Replace('{timestamp}', '*')
+        $ReportPath = $ReportPath.Replace('{timestamp}', $script:WsReportStamp)
+        $dir = [IO.Path]::GetDirectoryName($ReportPath)
+        if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force -WhatIf:$false | Out-Null
+        }
+        if ($dir -and (Test-Path -LiteralPath $dir)) {
+            Get-ChildItem -LiteralPath $dir -Filter $pattern -File -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -Skip 59 |
+                ForEach-Object { try { [IO.File]::Delete($_.FullName) } catch { Write-Verbose "prune: $($_.Exception.Message)" } }
+        }
+    }
     # Normalise to a flat array. Note: @() throws "Argument types do not match"
     # on a Generic.List[object] (which is exactly what the engines pass), so cast.
     $itemArr = if ($null -eq $Items) { @() } else { [object[]]$Items }

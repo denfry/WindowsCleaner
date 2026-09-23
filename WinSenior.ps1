@@ -11,7 +11,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.2.0
+    Version : 6.3.0
     Requires: PowerShell 5.1+ (Windows). Administrator rights (auto-elevates).
 
 .EXAMPLE
@@ -54,12 +54,31 @@ $script:ScheduleScript = Join-Path $script:Root 'WinSenior.Schedule.ps1'
 
 $script:GuiScript      = Join-Path $script:Root 'WinSenior.Gui.ps1'
 
+# The PowerShell executable running us, so a relaunch stays on the same runtime
+# (pwsh 7 or Windows PowerShell 5.1). Hosts that cannot take -File (ISE, editors)
+# fall back to the console executable of the same edition.
+function Get-WsHostExe {
+    $exe = $null
+    try { $exe = (Get-Process -Id $PID -ErrorAction Stop).Path } catch { $exe = $null }
+    if (-not $exe -or ((Split-Path $exe -Leaf) -notmatch '^(pwsh|powershell)\.exe$')) {
+        $exe = if ($PSVersionTable.PSEdition -eq 'Core') { Join-Path $PSHOME 'pwsh.exe' } else { Join-Path $PSHOME 'powershell.exe' }
+    }
+    if (-not (Test-Path -LiteralPath $exe)) { $exe = 'powershell.exe' }
+    $exe
+}
+
+# One command-line argument, quoted by the Windows (CommandLineToArgvW) rules.
+function ConvertTo-WsCmdArg {
+    param([string]$Value)
+    if ($Value -and $Value -notmatch '[\s"]') { return $Value }
+    '"' + ($Value -replace '(\\*)"', '$1$1\"' -replace '(\\+)$', '$1$1') + '"'
+}
+
 # -Gui hands off to the desktop app (it elevates itself and hides the console).
 if ($Gui) {
-    $exe = if ($PSVersionTable.PSEdition -eq 'Core') { Join-Path $PSHOME 'pwsh.exe' } else { Join-Path $PSHOME 'powershell.exe' }
-    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-WindowStyle', 'Hidden', '-File', "`"$script:GuiScript`"")
+    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-WindowStyle', 'Hidden', '-File', (ConvertTo-WsCmdArg $script:GuiScript))
     if ($NoElevate) { $a += '-NoElevate' }
-    Start-Process -FilePath $exe -ArgumentList $a -WindowStyle Hidden
+    Start-Process -FilePath (Get-WsHostExe) -ArgumentList ($a -join ' ') -WindowStyle Hidden
     exit 0
 }
 
@@ -80,9 +99,16 @@ if (-not (Test-AdminPrivileges)) {
     }
     else {
         Write-Host 'Requesting administrator privileges...' -ForegroundColor Cyan
+        # Forward every switch we were started with (-Plain, -InstallSchedule, ...)
+        # and stay on the same PowerShell runtime.
+        $relaunch = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (ConvertTo-WsCmdArg $PSCommandPath))
+        foreach ($k in $PSBoundParameters.Keys) {
+            $v = $PSBoundParameters[$k]
+            if ($v -is [System.Management.Automation.SwitchParameter]) { if ($v.IsPresent) { $relaunch += "-$k" } }
+            elseif ($null -ne $v) { $relaunch += @("-$k", (ConvertTo-WsCmdArg ([string]$v))) }
+        }
         try {
-            Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList @(
-                '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`"")
+            Start-Process -FilePath (Get-WsHostExe) -Verb RunAs -ArgumentList ($relaunch -join ' ') -ErrorAction Stop
             exit 0
         } catch {
             Write-Host 'Elevation cancelled. Re-run as Administrator, or use -NoElevate.' -ForegroundColor Red
