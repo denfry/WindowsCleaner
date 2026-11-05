@@ -4,6 +4,34 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.5.1] - 2026-11-05
+
+### Security
+- **App leftovers can no longer take out other data.** A folder matching the registry
+  `InstallLocation` only counts when its name also looks like the app or its publisher
+  (an installer that wrote `D:\Games` no longer marks the whole folder as "VeryGood").
+  Before anything is touched, a hard check refuses drive roots, Program Files / Windows /
+  ProgramData / Users, any profile and its known folders (also moved ones) and their
+  parents, anything inside Documents / Desktop / Downloads / OneDrive..., links and
+  junctions, 8.3 short paths, and folders that still hold programs (`.exe/.msi/...`) or a
+  folder of another installed app. Folder scans never walk into junctions.
+- Leftovers are **moved to a 30-day quarantine** instead of deleted (folders: same-volume
+  move to `%ProgramData%\WinSenior\AppQuarantine` or `X:\WinSenior.Quarantine`, admins
+  only; registry keys: exported to `.reg` first), with a `manifest.json` per batch. The
+  purge after 30 days removes links without following them.
+- **Per-user (HKCU) uninstall entries run without administrator rights** (one-shot
+  scheduled task, RunLevel Limited): any program of the user can write those entries, so
+  their command must never inherit WinSenior's elevation. Their leftovers are searched
+  only inside the user's profile. The full uninstall command is always logged.
+- The cleanup engine's `Test-SafeToDelete` checks protected folders as prefixes: a parent
+  of a protected folder (e.g. the folder above a moved profile) is refused too, and the
+  deny list now includes every profile and the current user's known folders.
+
+### Fixed
+- `install.ps1 -Uninstall` removes the `\WinSenior\` scheduled tasks (weekly cleanup,
+  health scan, Smart Memory) and `%ProgramFiles%\WinSenior`, asking for Administrator once
+  if needed; without it, it lists what is left and how to remove it.
+
 ## [6.5.0] - 2026-11-05
 
 The all-in-one release: drivers, apps and memory in the same tool, from official sources

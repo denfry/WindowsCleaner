@@ -15,7 +15,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.5.0
+    Version : 6.5.1
     Requires: PowerShell 5.1+ (Windows). Administrator rights for most tasks.
 
 .EXAMPLE
@@ -227,9 +227,11 @@ function Test-SafeToDelete {
     if ([string]::IsNullOrWhiteSpace($FullPath)) { return $false }
     $p = $FullPath.TrimEnd('\')
     if ($p.Length -le 3) { return $false }                       # drive root like C:\
-    $key = $p.ToLowerInvariant()
-    if ($script:DenyList -contains $key) { return $false }       # exact protected root
     if (($p -split '\\').Count -lt 3) { return $false }          # shallower than X:\a\b
+    # A protected folder itself OR any parent of one (a moved profile, D:\Profiles...):
+    # deny list + every profile and known folder, checked as prefixes, not exact names.
+    if (-not $script:DenySet) { $script:DenySet = New-WsProtectedSet (@($script:DenyList) + @(Get-WsProtectedPath)) }
+    if (Test-WsProtectedPath -Path $p -ProtectedSet $script:DenySet) { return $false }
     return $true
 }
 

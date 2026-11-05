@@ -14,7 +14,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.5.0
+    Version : 6.5.1
 #>
 
 # When an engine's stdout is redirected (desktop app, scheduler, CI) emit UTF-8
@@ -165,7 +165,7 @@ function Set-WsRestoreThrottle {
 #   DurationSec; engine-specific counters go in Summary, the per-unit list
 #   in Items. No-op without -ReportPath.
 # =====================================================================
-function Get-WinSeniorVersion { '6.5.0' }
+function Get-WinSeniorVersion { '6.5.1' }
 
 # =====================================================================
 # DISK HISTORY  (feeds the "days until full" forecast in WinSenior.Insights.ps1)
@@ -274,4 +274,96 @@ function Write-WinSeniorReport {
     catch {
         if ($LogAction) { & $LogAction "Could not write report: $($_.Exception.Message)" 'Warning' }
     }
+}
+
+# =====================================================================
+# PATH SAFETY (shared by the cleanup engine and the app uninstaller)
+# =====================================================================
+# Folders whose loss would be a disaster: Windows, Program Files as a whole,
+# ProgramData, the Users folder, every profile and its standard folders, and the
+# current user's known folders (also when they were moved to another drive).
+function Get-WsProtectedPath {
+    $list = New-Object System.Collections.Generic.List[string]
+    $special = 'Windows', 'System', 'SystemX86', 'ProgramFiles', 'ProgramFilesX86', 'CommonProgramFiles', 'CommonProgramFilesX86',
+        'CommonApplicationData', 'UserProfile', 'Desktop', 'DesktopDirectory', 'MyDocuments', 'MyMusic', 'MyPictures', 'MyVideos',
+        'Favorites', 'ApplicationData', 'LocalApplicationData', 'Programs', 'StartMenu', 'Startup', 'SendTo', 'Templates',
+        'CommonDesktopDirectory', 'CommonDocuments', 'CommonMusic', 'CommonPictures', 'CommonVideos', 'CommonPrograms', 'CommonStartMenu', 'CommonStartup'
+    foreach ($n in $special) { try { $list.Add([Environment]::GetFolderPath($n)) } catch { Write-Verbose "known folder $n" } }
+    foreach ($v in 'ProgramW6432', 'CommonProgramW6432', 'ProgramData', 'PUBLIC', 'OneDrive', 'OneDriveConsumer', 'OneDriveCommercial', 'WINDIR', 'USERPROFILE') {
+        $x = [Environment]::GetEnvironmentVariable($v); if ($x) { $list.Add($x) }
+    }
+    if ($env:SystemDrive) { $list.Add("$env:SystemDrive\Users") }
+    if ($env:LOCALAPPDATA) { $list.Add((Join-Path $env:LOCALAPPDATA 'Programs')); $list.Add((Join-Path $env:LOCALAPPDATA 'Packages')) }
+    # Downloads, Saved Games, Links ... have no SpecialFolder value - read the shell's own map.
+    $usf = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -ErrorAction SilentlyContinue
+    if ($usf) {
+        foreach ($p in $usf.PSObject.Properties) {
+            if ($p.Name -like 'PS*' -or $p.Value -isnot [string]) { continue }
+            $x = [Environment]::ExpandEnvironmentVariables($p.Value)
+            if ($x -match '^[A-Za-z]:\\|^\\\\') { $list.Add($x) }
+        }
+    }
+    $profiles = foreach ($k in (Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' -ErrorAction SilentlyContinue)) {
+        $p = (Get-ItemProperty -LiteralPath $k.PSPath -Name ProfileImagePath -ErrorAction SilentlyContinue).ProfileImagePath
+        if ($p) { [Environment]::ExpandEnvironmentVariables($p) }
+    }
+    foreach ($p in @($profiles)) {
+        $list.Add($p)
+        foreach ($s in $script:WsUserDataFolderNames + @('AppData', 'AppData\Roaming', 'AppData\Local', 'AppData\LocalLow', 'AppData\Local\Programs')) { $list.Add((Join-Path $p $s)) }
+    }
+    @($list | Where-Object { $_ } | ForEach-Object { $_.Trim().TrimEnd('\') } | Sort-Object -Unique)
+}
+
+# Personal-data folders inside a profile: nothing below them is ever an app leftover.
+$script:WsUserDataFolderNames = @('Desktop', 'Documents', 'Downloads', 'Music', 'Pictures', 'Videos', 'OneDrive', 'Saved Games',
+    'Favorites', 'Contacts', 'Links', 'Searches', '3D Objects')
+
+# Pure: a set that holds every protected path AND each of its ancestors, so that
+# "is this the folder or a parent of it" is one O(1) lookup per item.
+function New-WsProtectedSet {
+    param([string[]]$Path)
+    $set = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    foreach ($x in $Path) {
+        if ([string]::IsNullOrWhiteSpace($x)) { continue }
+        $p = $x.Trim().TrimEnd('\')
+        while ($p.Length -gt 2) {
+            [void]$set.Add($p)
+            $i = $p.LastIndexOf('\')
+            if ($i -lt 2) { break }
+            $p = $p.Substring(0, $i)
+        }
+    }
+    , $set
+}
+
+# True when deleting $Path would take out a drive / share root, a protected folder,
+# or a folder that CONTAINS a protected folder (D:\Profiles above a moved profile).
+function Test-WsProtectedPath {
+    param([string]$Path, [object]$ProtectedSet)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $true }
+    $p = $Path.Trim().TrimEnd('\')
+    if ($p.Length -le 3 -or $p -match '^[A-Za-z]:$' -or $p -match '^\\\\[^\\]+(\\[^\\]+)?$') { return $true }
+    if (-not $ProtectedSet) {
+        if (-not $script:WsProtectedSetCache) { $script:WsProtectedSetCache = New-WsProtectedSet (Get-WsProtectedPath) }
+        $ProtectedSet = $script:WsProtectedSetCache
+    }
+    $ProtectedSet.Contains($p)
+}
+
+# Recursive delete that never walks into a junction / symlink: the link itself is
+# removed, its target is not touched. (Remove-Item -Recurse in Windows PowerShell
+# 5.1 can follow a directory junction and empty the folder it points to.)
+function Remove-WsTree {
+    param([Parameter(Mandatory)][string]$Path)
+    $it = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    $isLink = [bool]($it.Attributes -band [IO.FileAttributes]::ReparsePoint)
+    if (-not $it.PSIsContainer) {
+        if (-not $isLink) { $it.Attributes = 'Normal' }     # on a symlink this would change the target
+        [IO.File]::Delete($it.FullName); return
+    }
+    if (-not $isLink) {
+        foreach ($c in @(Get-ChildItem -LiteralPath $it.FullName -Force -ErrorAction Stop)) { Remove-WsTree -Path $c.FullName }
+    }
+    $it.Attributes = 'Directory'
+    [IO.Directory]::Delete($it.FullName, $false)
 }

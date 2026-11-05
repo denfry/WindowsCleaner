@@ -12,10 +12,14 @@
       Get-WsInstalledApp        Win32 (HKLM 64/32-bit + HKCU) and Store apps
       Get-WsUninstallCommand    PURE: best silent command (MSI / quiet string /
                                 Inno Setup / NSIS) or the interactive fallback
-      Uninstall-WsApp           run it, wait, then look for leftovers
+      Uninstall-WsApp           run it, wait, then look for leftovers (HKCU entries
+                                run WITHOUT admin rights - any user program can write them)
       Find-WsAppLeftover        folders + registry keys left behind, each with a
       Get-WsLeftoverConfidence  confidence score (BCU-style; only Good/VeryGood
                                 are offered by default)
+      Get-WsLeftoverBlocker     hard safety checks (protected / personal folders,
+                                links, programs or another app inside)
+      Remove-WsAppLeftover      moves leftovers to a 30-day quarantine, never deletes
       ConvertFrom-WsWingetTable PURE: parse winget's table by column position
                                 (headers are localized - positions are not)
       Get-WsAppUpdate / Update-WsApp / Install-WsApp   winget wrappers
@@ -126,7 +130,15 @@ function Split-WsCommandLine {
     [pscustomobject]@{ Exe = $parts[0]; Args = $(if ($parts.Count -gt 1) { $parts[1] } else { '' }) }
 }
 
+# RunAsUser: the entry came from HKCU, which any program of that user can write
+# without admin rights - its command must never inherit our elevation.
 function Get-WsUninstallCommand {
+    param([object]$App)
+    $c = Get-WsUninstallCommandCore $App
+    $c | Add-Member -NotePropertyName RunAsUser -NotePropertyValue ($App.Scope -eq 'User' -and $c.Kind -ne 'Store') -PassThru
+}
+
+function Get-WsUninstallCommandCore {
     param([object]$App)
     if ($App.Source -eq 'Store') { return [pscustomobject]@{ Kind = 'Store'; Exe = $null; Args = $App.PackageFullName; Silent = $true } }
     if ($App.ProductCode) {
@@ -156,17 +168,24 @@ function Get-WsUninstallCommand {
 $script:WsGenericNames = @('microsoft', 'microsoft corporation', 'windows', 'common files', 'update', 'updates', 'temp', 'tmp',
     'cache', 'data', 'logs', 'google', 'intel', 'amd', 'nvidia', 'nvidia corporation', 'packages', 'programs', 'users',
     'appdata', 'local', 'roaming', 'program files', 'program files (x86)', 'system32', 'drivers', 'installer', 'mozilla',
-    'apple', 'adobe', 'java', 'oracle', 'python', 'node', 'npm', 'git', 'steam', 'software', 'classes', 'policies')
+    'apple', 'adobe', 'java', 'oracle', 'python', 'node', 'npm', 'git', 'steam', 'software', 'classes', 'policies', 'wow6432node',
+    # catch-all folders installers like to write into InstallLocation
+    'games', 'game', 'my games', 'documents', 'docs', 'desktop', 'downloads', 'music', 'pictures', 'videos', 'onedrive', 'dropbox',
+    'tools', 'utils', 'utilities', 'apps', 'applications', 'app', 'bin', 'lib', 'soft', 'portable', 'install', 'setup', 'distr',
+    'backup', 'backups', 'work', 'projects', 'src', 'source', 'dev', 'home', 'public', 'shared', 'common', 'files', 'misc', 'other')
 
 function Get-WsNameKey { param([string]$s) (($s -replace '\(.*?\)|\bv?\d+(\.\d+)*\b|x64|x86|64-bit|32-bit', '') -replace '[^\p{L}\p{N}]', '').ToLowerInvariant() }
 
 # Pure. Candidate = @{ Path; Kind='Folder'|'RegKey'; Leaf }. Returns VeryGood/Good/
 # Questionable/Bad. OtherApps = install locations / names of apps still installed.
+# InstallLocation is just a registry string (installers write D:\Games or the
+# Documents folder there), so it only counts when the folder NAME also looks like
+# the app or its publisher.
 function Get-WsLeftoverConfidence {
     param([object]$Candidate, [object]$App, [string[]]$OtherLocations = @(), [string[]]$OtherNames = @())
     $leaf = [string]$Candidate.Leaf
     $lk = Get-WsNameKey $leaf
-    if (-not $lk -or $script:WsGenericNames -contains $leaf.ToLowerInvariant() -or $lk.Length -lt 3) { return 'Bad' }
+    if (-not $lk -or $script:WsGenericNames -contains $leaf.ToLowerInvariant() -or $script:WsGenericNames -contains $lk -or $lk.Length -lt 3) { return 'Bad' }
     $full = ([string]$Candidate.Path).TrimEnd('\').ToLowerInvariant()
     foreach ($o in $OtherLocations) {
         if (-not $o) { continue }
@@ -175,28 +194,110 @@ function Get-WsLeftoverConfidence {
     }
     foreach ($n in $OtherNames) { if ((Get-WsNameKey $n) -eq $lk) { return 'Bad' } }  # another installed app has this name
     $nk = Get-WsNameKey $App.Name; $pk = Get-WsNameKey $App.Publisher
-    $score = 0
-    if ($App.InstallLocation -and $full -eq $App.InstallLocation.TrimEnd('\').ToLowerInvariant()) { $score += 3 }
-    if ($lk -eq $nk) { $score += 2 }
-    elseif ($nk.Length -ge 4 -and ($nk.StartsWith($lk) -or $lk.StartsWith($nk)) -and $lk.Length -ge 4) { $score += 1 }
+    $nameScore = 0
+    if ($lk -eq $nk) { $nameScore = 2 }
+    elseif ($nk.Length -ge 4 -and ($nk.StartsWith($lk) -or $lk.StartsWith($nk)) -and $lk.Length -ge 4) { $nameScore = 1 }
+    $pubLike = $pk -and $pk.Length -ge 3 -and ($lk -eq $pk -or ($lk.Length -ge 4 -and ($pk.StartsWith($lk) -or $lk.StartsWith($pk))))
+    $score = $nameScore
+    if ($App.InstallLocation -and $full -eq $App.InstallLocation.TrimEnd('\').ToLowerInvariant() -and ($nameScore -gt 0 -or $pubLike)) { $score += 3 }
     if ($pk -and $full -match [regex]::Escape($pk) -and $lk -ne $pk) { $score += 1 }
     switch ($score) { { $_ -ge 3 } { 'VeryGood'; break } 2 { 'Good'; break } 1 { 'Questionable'; break } default { 'Bad' } }
+}
+
+# One walk of a folder that never enters a junction / symlink (Get-ChildItem
+# -Recurse in Windows PowerShell 5.1 follows them). Stops after $Limit entries.
+function Get-WsFolderScan {
+    param([string]$Path, [int]$Limit = 50000)
+    $r = [pscustomobject]@{ Bytes = [int64]0; Files = 0; Programs = (New-Object System.Collections.Generic.List[string])
+        Dirs = (New-Object System.Collections.Generic.List[string]); Links = 0; Truncated = $false }
+    $stack = New-Object System.Collections.Generic.Stack[System.IO.DirectoryInfo]
+    $stack.Push((New-Object System.IO.DirectoryInfo($Path)))
+    $seen = 0
+    :walk while ($stack.Count) {
+        $d = $stack.Pop()
+        try { $entries = $d.GetFileSystemInfos() } catch { continue }
+        foreach ($e in $entries) {
+            if (++$seen -gt $Limit) { $r.Truncated = $true; break walk }
+            if ($e.Attributes -band [IO.FileAttributes]::ReparsePoint) { $r.Links++; continue }
+            if ($e -is [System.IO.DirectoryInfo]) { $r.Dirs.Add($e.Name); $stack.Push($e); continue }
+            $r.Files++; $r.Bytes += $e.Length
+            if ($e.Extension -match '^\.(exe|com|scr|msi)$') { $r.Programs.Add($e.FullName.Substring($Path.TrimEnd('\').Length + 1)) }
+        }
+    }
+    $r
+}
+
+# Folders below which nothing is ever an app leftover (user documents, desktop ...).
+function Get-WsUserDataPath {
+    $l = New-Object System.Collections.Generic.List[string]
+    foreach ($n in 'Desktop', 'MyDocuments', 'MyMusic', 'MyPictures', 'MyVideos', 'Favorites', 'CommonDesktopDirectory', 'CommonDocuments') {
+        try { $l.Add([Environment]::GetFolderPath($n)) } catch { Write-Verbose $n }
+    }
+    foreach ($v in 'OneDrive', 'OneDriveConsumer', 'OneDriveCommercial') { $x = [Environment]::GetEnvironmentVariable($v); if ($x) { $l.Add($x) } }
+    $usf = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -ErrorAction SilentlyContinue
+    foreach ($g in '{374DE290-123F-4565-9164-39C4925E467B}', '{4C5C32FF-BB9D-43b0-B5B4-2D72E54EAAA4}') {   # Downloads, Saved Games
+        if ($usf -and $usf.$g) { $l.Add([Environment]::ExpandEnvironmentVariables($usf.$g)) }
+    }
+    if ($env:USERPROFILE) { foreach ($s in $script:WsUserDataFolderNames) { $l.Add((Join-Path $env:USERPROFILE $s)) } }
+    @($l | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') } | Sort-Object -Unique)
+}
+
+# Why this leftover must NOT be removed, or $null when it may go. Re-checked right
+# before the move, so it also guards entries built by hand or by an older version.
+function Get-WsLeftoverBlocker {
+    param([object]$Leftover, [object[]]$Remaining = @(), [object]$ProtectedSet, [string[]]$UserData = (Get-WsUserDataPath))
+    $path = ([string]$Leftover.Path).Trim()
+    if ($Leftover.Kind -eq 'RegKey') {
+        if ($path -notmatch '^(HKCU|HKLM):\\SOFTWARE\\(WOW6432Node\\)?[^\\]+') { return 'not an app key under SOFTWARE' }
+        if ($path -match '(?i)^HK(CU|LM):\\SOFTWARE\\(WOW6432Node\\)?(Microsoft|Classes|Policies|Wow6432Node)(\\|$)') { return 'system registry branch' }
+        return $null
+    }
+    if ($path -notmatch '^[A-Za-z]:\\') { return 'not a local path' }
+    if ($path -match '(^|\\)\.{1,2}(\\|$)') { return 'relative path' }
+    if ($path -match '~\d') { return 'short 8.3 path - cannot be checked' }
+    $p = $path.TrimEnd('\')
+    if (($p -split '\\').Count -lt 3) { return 'too close to the drive root' }
+    if (Test-WsProtectedPath -Path $p -ProtectedSet $ProtectedSet) { return 'protected system or user folder' }
+    foreach ($u in $UserData) { if ($p -ieq $u -or $p.StartsWith($u + '\', [StringComparison]::OrdinalIgnoreCase)) { return "inside a personal folder ($u)" } }
+    $it = Get-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue
+    if (-not $it) { return 'already gone' }
+    if ($it.Attributes -band [IO.FileAttributes]::ReparsePoint) { return 'is a link / junction' }
+    if (-not $it.PSIsContainer) { return 'not a folder' }
+    foreach ($o in $Remaining) {
+        $ol = ([string]$o.InstallLocation).TrimEnd('\')
+        if ($ol -and ($ol -ieq $p -or $ol.StartsWith($p + '\', [StringComparison]::OrdinalIgnoreCase))) { return "another app is installed here ($($o.Name))" }
+    }
+    $scan = Get-WsFolderScan -Path $p
+    if ($scan.Truncated) { return 'too many files for a leftover' }
+    if ($scan.Programs.Count) { return "still contains programs ($($scan.Programs[0]))" }
+    $otherKeys = @{}
+    foreach ($o in $Remaining) { $k = Get-WsNameKey $o.Name; if ($k.Length -ge 4) { $otherKeys[$k] = $o.Name } }
+    foreach ($d in $scan.Dirs) { $k = Get-WsNameKey $d; if ($k -and $otherKeys[$k]) { return "contains a folder of another installed app ($($otherKeys[$k]))" } }
+    $null
 }
 
 function Find-WsAppLeftover {
     param([object]$App, [object[]]$Remaining = @())
     $names = @($App.Name, ($App.Name -replace '\s*\(.*?\)\s*', '' -replace '\s+v?\d+(\.\d+)*$', '').Trim()) | Where-Object { $_ } | Sort-Object -Unique
     $pub = ($App.Publisher -replace ',?\s*(Inc|LLC|Ltd|GmbH|Corp(oration)?|Co|S\.A|AB)\.?$', '').Trim()
-    $roots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramData, $env:APPDATA, $env:LOCALAPPDATA, (Join-Path $env:LOCALAPPDATA 'Programs')) | Where-Object { $_ }
+    # A per-user (HKCU) entry can be written by any program of that user, so its
+    # InstallLocation / names are trusted only inside the user's own profile.
+    $userScope = $App.Scope -eq 'User'
+    $roots = if ($userScope) { @($env:APPDATA, $env:LOCALAPPDATA, (Join-Path $env:LOCALAPPDATA 'Programs')) }
+             else { @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramData, $env:APPDATA, $env:LOCALAPPDATA, (Join-Path $env:LOCALAPPDATA 'Programs')) }
+    $roots = @($roots | Where-Object { $_ })
+    $hives = if ($userScope) { @('HKCU:\SOFTWARE') } else { @('HKCU:\SOFTWARE', 'HKLM:\SOFTWARE', 'HKLM:\SOFTWARE\WOW6432Node') }
     $cands = New-Object System.Collections.Generic.List[object]
-    if ($App.InstallLocation -and (Test-Path -LiteralPath $App.InstallLocation)) {
-        $cands.Add([pscustomobject]@{ Kind = 'Folder'; Path = $App.InstallLocation.TrimEnd('\'); Leaf = (Split-Path $App.InstallLocation.TrimEnd('\') -Leaf) })
+    $loc = ([string]$App.InstallLocation).Trim().Trim('"').TrimEnd('\')
+    $locOk = $loc -and (-not $userScope -or ($env:USERPROFILE -and $loc.StartsWith($env:USERPROFILE + '\', [StringComparison]::OrdinalIgnoreCase)))
+    if ($locOk -and (Test-Path -LiteralPath $loc -PathType Container)) {
+        $cands.Add([pscustomobject]@{ Kind = 'Folder'; Path = $loc; Leaf = (Split-Path $loc -Leaf) })
     }
     foreach ($r in $roots) {
         foreach ($n in $names) { $p = Join-Path $r $n; if (Test-Path -LiteralPath $p -PathType Container) { $cands.Add([pscustomobject]@{ Kind = 'Folder'; Path = $p; Leaf = $n }) } }
         if ($pub) { foreach ($n in $names) { $p = Join-Path (Join-Path $r $pub) $n; if (Test-Path -LiteralPath $p -PathType Container) { $cands.Add([pscustomobject]@{ Kind = 'Folder'; Path = $p; Leaf = $n }) } } }
     }
-    foreach ($hive in 'HKCU:\SOFTWARE', 'HKLM:\SOFTWARE', 'HKLM:\SOFTWARE\WOW6432Node') {
+    foreach ($hive in $hives) {
         foreach ($n in $names) {
             foreach ($p in @((Join-Path $hive $n), $(if ($pub) { Join-Path (Join-Path $hive $pub) $n }))) {
                 if ($p -and (Test-Path -LiteralPath $p)) { $cands.Add([pscustomobject]@{ Kind = 'RegKey'; Path = $p; Leaf = $n }) }
@@ -205,26 +306,137 @@ function Find-WsAppLeftover {
     }
     $otherLoc = @($Remaining | ForEach-Object { $_.InstallLocation } | Where-Object { $_ })
     $otherNames = @($Remaining | Where-Object { $_.Name -ne $App.Name } | ForEach-Object { $_.Name })
+    $userData = Get-WsUserDataPath
     $cands | Sort-Object Path -Unique | ForEach-Object {
         $size = 0
-        if ($_.Kind -eq 'Folder') { $size = [int64](Get-ChildItem -LiteralPath $_.Path -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum }
-        [pscustomobject]@{ Kind = $_.Kind; Path = $_.Path; SizeBytes = $size
-            Confidence = (Get-WsLeftoverConfidence -Candidate $_ -App $App -OtherLocations $otherLoc -OtherNames $otherNames) }
+        if ($_.Kind -eq 'Folder') { $size = (Get-WsFolderScan -Path $_.Path).Bytes }
+        $conf = Get-WsLeftoverConfidence -Candidate $_ -App $App -OtherLocations $otherLoc -OtherNames $otherNames
+        $l = [pscustomobject]@{ Kind = $_.Kind; Path = $_.Path; SizeBytes = $size; Confidence = $conf; Blocker = $null }
+        if ($conf -in 'VeryGood', 'Good') { $l.Blocker = Get-WsLeftoverBlocker -Leftover $l -Remaining $Remaining -UserData $userData }
+        $l
     }
+}
+
+# =====================================================================
+# QUARANTINE (30 days, like the msi-orphans task)
+#   Leftovers are MOVED, never deleted outright: a folder goes to a quarantine
+#   folder on its own volume (a move is a rename - instant, no copy), a registry
+#   key is exported to a .reg file first. Batches older than 30 days are purged.
+# =====================================================================
+$script:WsQuarantineDays = 30
+
+function Get-WsAppQuarantineRoot {
+    param([string]$ForPath)
+    $sys = Join-Path $env:ProgramData 'WinSenior\AppQuarantine'
+    if (-not $ForPath -or $ForPath -notmatch '^[A-Za-z]:\\') { return $sys }
+    $vol = [IO.Path]::GetPathRoot($ForPath)
+    if ($vol -ieq [IO.Path]::GetPathRoot($env:ProgramData)) { return $sys }
+    Join-Path $vol 'WinSenior.Quarantine'
+}
+
+function Initialize-WsQuarantineFolder {
+    param([string]$Root)
+    if (Test-Path -LiteralPath $Root) { return }
+    New-Item -ItemType Directory -Path $Root -Force -WhatIf:$false | Out-Null
+    # Administrators + SYSTEM only, so nobody else can read the user's old data or plant
+    # links. (Only when elevated - a non-admin run would lock itself out.)
+    if (Test-AdminPrivileges) { & icacls.exe $Root /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-18:(OI)(CI)F' *> $null }
+    if ($Root -match '^[A-Za-z]:\\[^\\]+$') { try { (Get-Item -LiteralPath $Root -Force).Attributes = 'Directory, Hidden' } catch { Write-Verbose $_ } }
+}
+
+function Get-WsAppQuarantineRootAll {
+    $all = @(Get-WsAppQuarantineRoot)
+    foreach ($d in [IO.DriveInfo]::GetDrives()) {
+        if ($d.DriveType -eq 'Fixed' -and $d.IsReady) { $all += (Join-Path $d.RootDirectory.FullName 'WinSenior.Quarantine') }
+    }
+    @($all | Where-Object { Test-Path -LiteralPath $_ } | Sort-Object -Unique)
+}
+
+function Clear-WsAppQuarantine {
+    [CmdletBinding(SupportsShouldProcess)]
+    param([string[]]$Root = (Get-WsAppQuarantineRootAll), [int]$Days = $script:WsQuarantineDays)
+    $n = 0
+    foreach ($r in $Root) {
+        foreach ($b in @(Get-ChildItem -LiteralPath $r -Directory -Force -ErrorAction SilentlyContinue | Where-Object { $_.CreationTime -lt (Get-Date).AddDays(-$Days) })) {
+            if (-not $PSCmdlet.ShouldProcess($b.FullName, "Delete quarantined leftovers (> $Days days)")) { continue }
+            try { Remove-WsTree -Path $b.FullName; $n++ } catch { Write-AppLog "  could not purge $($b.FullName): $($_.Exception.Message)" 'Warning' }
+        }
+    }
+    $n
 }
 
 function Remove-WsAppLeftover {
     [CmdletBinding(SupportsShouldProcess)]
-    param([object[]]$Leftovers, [string[]]$Confidence = @('VeryGood', 'Good'))
+    param([object[]]$Leftovers, [string[]]$Confidence = @('VeryGood', 'Good'), [object[]]$Remaining = @(),
+          [string]$QuarantineRoot)    # override (tests); default = per volume, see Get-WsAppQuarantineRoot
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $batches = @{}
+    $userData = Get-WsUserDataPath
     $n = 0
     foreach ($l in ($Leftovers | Where-Object { $Confidence -contains $_.Confidence })) {
-        if (($l.Path -split '\\').Count -lt 3) { continue }    # never a root or a hive top
-        if ($PSCmdlet.ShouldProcess($l.Path, "Remove leftover $($l.Kind.ToLower()) ($($l.Confidence))")) {
-            try { Remove-Item -LiteralPath $l.Path -Recurse -Force -ErrorAction Stop; $n++ }
-            catch { Write-AppLog "  could not remove $($l.Path): $($_.Exception.Message)" 'Warning' }
+        $why = Get-WsLeftoverBlocker -Leftover $l -Remaining $Remaining -UserData $userData
+        if ($why) { Write-AppLog "  kept $($l.Path): $why" 'Warning'; continue }
+        if (-not $PSCmdlet.ShouldProcess($l.Path, "Move leftover $($l.Kind.ToLower()) ($($l.Confidence)) to quarantine, deleted after $script:WsQuarantineDays days")) { continue }
+        try {
+            $root = if ($QuarantineRoot) { $QuarantineRoot } elseif ($l.Kind -eq 'Folder') { Get-WsAppQuarantineRoot $l.Path } else { Get-WsAppQuarantineRoot }
+            Initialize-WsQuarantineFolder $root
+            $batch = Join-Path $root $stamp
+            if (-not $batches[$batch]) {
+                New-Item -ItemType Directory -Path $batch -Force -WhatIf:$false | Out-Null
+                $batches[$batch] = New-Object System.Collections.Generic.List[object]
+            }
+            $slot = '{0:D2}-{1}' -f ($batches[$batch].Count + 1), ((Split-Path $l.Path -Leaf) -replace '[\\/:*?"<>|]', '_')
+            if ($l.Kind -eq 'Folder') {
+                $dest = Join-Path $batch $slot
+                [IO.Directory]::Move($l.Path.TrimEnd('\'), $dest)        # same volume: a rename, links move as links
+            }
+            else {
+                $dest = Join-Path $batch ($slot + '.reg')
+                $native = $l.Path -replace '^(HKCU|HKLM):', '$1'
+                & reg.exe export $native $dest /y *> $null
+                if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $dest)) { throw "reg export failed ($LASTEXITCODE)" }
+                Remove-Item -LiteralPath $l.Path -Recurse -Force -ErrorAction Stop
+            }
+            $batches[$batch].Add([ordered]@{ Kind = $l.Kind; From = $l.Path; To = $dest; Bytes = $l.SizeBytes })
+            Write-AppLog "  quarantined $($l.Path)" 'Info'
+            $n++
         }
+        catch { Write-AppLog "  could not remove $($l.Path): $($_.Exception.Message)" 'Warning' }
+    }
+    foreach ($b in $batches.Keys) {
+        @{ Created = (Get-Date).ToString('s'); PurgeAfterDays = $script:WsQuarantineDays; Items = $batches[$b] } | ConvertTo-Json -Depth 4 |
+            Set-Content -LiteralPath (Join-Path $b 'manifest.json') -Encoding UTF8 -WhatIf:$false
+        Write-AppLog "  quarantine: $b (restore: move the folder back / double-click the .reg; purged after $script:WsQuarantineDays days)" 'Info'
     }
     $n
+}
+
+# =====================================================================
+# UNINSTALL
+# =====================================================================
+# Run a program with the interactive user's normal (non-elevated) token: a one-shot
+# scheduled task with RunLevel Limited. Used for HKCU uninstall entries - anything
+# running as that user can write them, so they must never get our admin rights.
+function Invoke-WsUnelevated {
+    param([string]$Exe, [string]$Arguments, [int]$TimeoutMinutes = 30)
+    $name = 'WinSenior Uninstall ' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $act = if ($Arguments) { New-ScheduledTaskAction -Execute $Exe -Argument $Arguments } else { New-ScheduledTaskAction -Execute $Exe }
+    $pr = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+    $st = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew `
+            -ExecutionTimeLimit (New-TimeSpan -Minutes $TimeoutMinutes)
+    Register-ScheduledTask -TaskName $name -TaskPath '\WinSenior\' -Action $act -Principal $pr -Settings $st -Force -ErrorAction Stop | Out-Null
+    try {
+        Start-ScheduledTask -TaskName $name -TaskPath '\WinSenior\' -ErrorAction Stop
+        $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+        do {
+            Start-Sleep -Milliseconds 500
+            $t = Get-ScheduledTask -TaskName $name -TaskPath '\WinSenior\' -ErrorAction SilentlyContinue
+        } while ($t -and $t.State -in 'Running', 'Queued' -and (Get-Date) -lt $deadline)
+        if ($t -and $t.State -in 'Running', 'Queued') { return $null }     # timed out, still running
+        [int]((Get-ScheduledTaskInfo -TaskName $name -TaskPath '\WinSenior\').LastTaskResult)
+    }
+    finally { Unregister-ScheduledTask -TaskName $name -TaskPath '\WinSenior\' -Confirm:$false -ErrorAction SilentlyContinue }
 }
 
 function Uninstall-WsApp {
@@ -238,13 +450,24 @@ function Uninstall-WsApp {
     }
     else {
         $exe = [Environment]::ExpandEnvironmentVariables($cmd.Exe)
+        Write-AppLog ("  command: `"{0}`" {1}" -f $exe, $cmd.Args) 'Info'
         try {
-            $sp = @{ FilePath = $exe; PassThru = $true; ErrorAction = 'Stop' }
-            if ($cmd.Args) { $sp.ArgumentList = $cmd.Args }
-            if ($cmd.Silent) { $sp.WindowStyle = 'Hidden' }
-            $p = Start-Process @sp
-            if (-not $p.WaitForExit($TimeoutMinutes * 60000)) { Write-AppLog '  uninstaller still running - not waiting any longer' 'Warning' }
-            else { $code = $p.ExitCode }
+            if ($cmd.RunAsUser -and (Test-AdminPrivileges)) {
+                Write-AppLog '  per-user entry (HKCU): its uninstaller runs WITHOUT administrator rights' 'Info'
+                $code = Invoke-WsUnelevated -Exe $exe -Arguments $cmd.Args -TimeoutMinutes $TimeoutMinutes
+                if ($null -eq $code) { Write-AppLog '  uninstaller still running - not waiting any longer' 'Warning' }
+                elseif ($code -in 740, -2147024156) {   # ERROR_ELEVATION_REQUIRED / 0x800702E4
+                    Write-AppLog '  this per-user uninstaller asks for administrator rights - run it from Settings > Apps instead' 'Warning'
+                }
+            }
+            else {
+                $sp = @{ FilePath = $exe; PassThru = $true; ErrorAction = 'Stop' }
+                if ($cmd.Args) { $sp.ArgumentList = $cmd.Args }
+                if ($cmd.Silent) { $sp.WindowStyle = 'Hidden' }
+                $p = Start-Process @sp
+                if (-not $p.WaitForExit($TimeoutMinutes * 60000)) { Write-AppLog '  uninstaller still running - not waiting any longer' 'Warning' }
+                else { $code = $p.ExitCode }
+            }
             # Inno/NSIS uninstallers re-launch themselves from %TEMP% and exit at once.
             if ($cmd.Kind -in 'Inno', 'NSIS') { Start-Sleep -Seconds 5; Get-Process -Name 'Au_', 'un_*', '_iu*' -ErrorAction SilentlyContinue | Wait-Process -Timeout 600 -ErrorAction SilentlyContinue }
         } catch { $code = -1; Write-AppLog "  could not start the uninstaller: $($_.Exception.Message)" 'Error' }
@@ -440,6 +663,7 @@ function Start-WsApps {
     }
     $apps = @(Get-WsInstalledApp -IncludeStore)
     if ($Uninstall) {
+        if (Test-AdminPrivileges) { [void](Clear-WsAppQuarantine) }    # leftovers quarantined > 30 days ago
         foreach ($q in $Uninstall) {
             $hit = @(Resolve-WsAppByName $apps $q)
             if ($hit.Count -ne 1) { Write-AppLog ("'{0}': {1} match(es) - use the exact name." -f $q, $hit.Count) 'Warning'; $hit | ForEach-Object { Write-AppLog "    $($_.Name)" 'Info' }; continue }
@@ -451,9 +675,16 @@ function Start-WsApps {
             if (-not $res) { continue }
             Write-AppLog ("  {0} (exit {1})" -f $(if ($res.Ok) { 'removed' } else { 'NOT removed' }), $res.ExitCode) $(if ($res.Ok) { 'Success' } else { 'Error' })
             if ($res.Removed) {
-                $left = @(Find-WsAppLeftover -App $app -Remaining @(Get-WsInstalledApp))
-                foreach ($l in $left) { Write-AppLog ("  leftover {0,-6} {1,-12} {2} {3}" -f $l.Kind, $l.Confidence, $l.Path, $(if ($l.SizeBytes) { Format-FileSize $l.SizeBytes })) 'Info' }
-                if ($RemoveLeftovers -and $left) { $n = Remove-WsAppLeftover -Leftovers $left; Write-AppLog "  removed $n leftover(s) (Good/VeryGood only)" 'Success' }
+                $remaining = @(Get-WsInstalledApp)
+                $left = @(Find-WsAppLeftover -App $app -Remaining $remaining)
+                foreach ($l in $left) {
+                    Write-AppLog ("  leftover {0,-6} {1,-12} {2} {3}{4}" -f $l.Kind, $l.Confidence, $l.Path, $(if ($l.SizeBytes) { Format-FileSize $l.SizeBytes }),
+                        $(if ($l.Blocker) { "  [kept: $($l.Blocker)]" })) 'Info'
+                }
+                if ($RemoveLeftovers -and $left) {
+                    $n = Remove-WsAppLeftover -Leftovers $left -Remaining $remaining
+                    Write-AppLog "  moved $n leftover(s) to quarantine (Good/VeryGood only, deleted after $script:WsQuarantineDays days)" 'Success'
+                }
             }
         }
         return
