@@ -61,7 +61,8 @@ only, plus measurements and statistics instead of guesses.
   - `vhdx-compact`: WSL2 and Docker virtual disks via `diskpart compact vdisk`.
 - Every engine run records a disk-space sample in `%ProgramData%\WinSenior\disk-history.csv`
   for the forecast.
-- The console menu has new Drivers, Apps, Smart memory and Insights screens.
+- Desktop app and console menu: new **Tools** section with Drivers, Apps, Smart memory and
+  Insights pages (Russian UI included; output streams into the log panel).
 ## [6.4.0] - 2026-11-05
 
 A redesign of the desktop app: a start page, a calmer layout, Russian, and no frozen window.

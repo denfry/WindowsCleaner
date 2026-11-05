@@ -103,6 +103,10 @@ $script:RepairScript   = Join-Path $script:Root 'Repair-Windows-Senior.ps1'
 $script:MenuScript     = Join-Path $script:Root 'WinSenior.ps1'
 $script:ScheduleScript = Join-Path $script:Root 'WinSenior.Schedule.ps1'
 $script:StartupScript  = Join-Path $script:Root 'WinSenior.Startup.ps1'
+$script:DriversScript  = Join-Path $script:Root 'WinSenior.Drivers.ps1'
+$script:AppsScript     = Join-Path $script:Root 'WinSenior.Apps.ps1'
+$script:MemoryScript   = Join-Path $script:Root 'WinSenior.Memory.ps1'
+$script:InsightsScript = Join-Path $script:Root 'WinSenior.Insights.ps1'
 
 foreach ($s in @($script:CommonScript, $script:CleanupScript, $script:OptimizeScript, $script:RepairScript, $script:ScheduleScript)) {
     if (-not (Test-Path -LiteralPath $s)) {
@@ -1285,6 +1289,11 @@ $xaml = @'
             <RadioButton x:Name="NavOpt"      Style="{StaticResource Nav}" Tag="&#xE945;" Content="Optimize"/>
             <RadioButton x:Name="NavRepair"   Style="{StaticResource Nav}" Tag="&#xE90F;" Content="Troubleshoot"/>
             <RadioButton x:Name="NavStartup"  Style="{StaticResource Nav}" Tag="&#xE7E8;" Content="Startup apps"/>
+            <TextBlock Style="{StaticResource NavSection}" Text="TOOLS"/>
+            <RadioButton x:Name="NavDrivers"  Style="{StaticResource Nav}" Tag="&#xE772;" Content="Drivers"/>
+            <RadioButton x:Name="NavApps"     Style="{StaticResource Nav}" Tag="&#xE71D;" Content="Apps"/>
+            <RadioButton x:Name="NavMemory"   Style="{StaticResource Nav}" Tag="&#xE964;" Content="Smart memory"/>
+            <RadioButton x:Name="NavInsights" Style="{StaticResource Nav}" Tag="&#xE9D9;" Content="Insights"/>
             <TextBlock Style="{StaticResource NavSection}" Text="SAFETY &amp; HISTORY"/>
             <RadioButton x:Name="NavHistory"  Style="{StaticResource Nav}" Tag="&#xE81C;" Content="History"/>
             <RadioButton x:Name="NavUndo"     Style="{StaticResource Nav}" Tag="&#xE7A7;" Content="Undo &amp; restore"/>
@@ -1842,6 +1851,141 @@ $xaml = @'
           </StackPanel>
         </ScrollViewer>
 
+        <!-- DRIVERS -->
+        <ScrollViewer x:Name="PageDrivers" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="0,0,6,0">
+            <TextBlock Style="{StaticResource H1}" Text="Drivers"/>
+            <TextBlock Style="{StaticResource Sub}" Text="Official sources only: Microsoft Update for chipset, network, audio and the rest; the GPU vendor's own driver for graphics. Results appear in the log below."/>
+            <Border Style="{StaticResource Panel}" Margin="0,0,0,14">
+              <StackPanel>
+                <TextBlock Text="Check and update" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <TextBlock Style="{StaticResource Hint}" Text="Shows your graphics card and how old its driver is, devices with errors, and every driver update Microsoft Update offers. The first search can take a few minutes."/>
+                <WrapPanel Margin="0,12,0,0">
+                  <Button x:Name="BtnDrvCheck" Style="{StaticResource Primary}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Ico}" Text="&#xE721;"/><TextBlock Text="Check drivers"/></StackPanel>
+                  </Button>
+                  <Button x:Name="BtnDrvInstall" Content="Install updates (except GPU)"/>
+                  <Button x:Name="BtnDrvHideGpu" Content="Hide GPU updates from Windows Update"/>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Panel}" Margin="0,0,0,14">
+              <StackPanel>
+                <TextBlock Text="Backup" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <TextBlock Style="{StaticResource Hint}" Text="Exports every third-party driver (pnputil) to Documents\WinSenior\DriverBackup - handy before a Windows reinstall."/>
+                <WrapPanel Margin="0,12,0,0">
+                  <Button x:Name="BtnDrvBackup" Content="Back up drivers"/>
+                  <Button x:Name="BtnDrvBackupOpen" Content="Open backup folder"/>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+            <TextBlock Style="{StaticResource Hint}" Text="Why not Windows Update for the graphics card? For games, NVIDIA / AMD / Intel drivers are newer than the ones Windows Update ships and include the game profiles."/>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- APPS -->
+        <ScrollViewer x:Name="PageApps" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="0,0,6,0">
+            <TextBlock Style="{StaticResource H1}" Text="Apps"/>
+            <TextBlock Style="{StaticResource Sub}" Text="Uninstall, update and install programs without hunting for installers: winget downloads from the vendors' own sites and checks the hash. Results appear in the log below."/>
+            <Border Style="{StaticResource Panel}" Margin="0,0,0,14">
+              <StackPanel>
+                <TextBlock Text="Installed apps and updates" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <WrapPanel Margin="0,8,0,0">
+                  <Button x:Name="BtnAppsList" Content="List installed apps"/>
+                  <Button x:Name="BtnAppsUpdates" Style="{StaticResource Primary}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Ico}" Text="&#xE895;"/><TextBlock Text="Check for updates"/></StackPanel>
+                  </Button>
+                  <Button x:Name="BtnAppsUpdateAll" Content="Update everything"/>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Panel}" Margin="0,0,0,14">
+              <StackPanel>
+                <TextBlock Text="Uninstall" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <TextBlock Style="{StaticResource Hint}" Text="Type the name exactly as the list shows it. Silent where the installer allows it; afterwards leftover folders and registry keys with a confident match are removed."/>
+                <DockPanel Margin="0,10,0,0">
+                  <Button x:Name="BtnAppsUninstall" DockPanel.Dock="Right" Style="{StaticResource Danger}" Content="Uninstall" Margin="8,0,0,0"/>
+                  <TextBox x:Name="TxtAppName" MinWidth="260"/>
+                </DockPanel>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Panel}" Margin="0,0,0,14">
+              <StackPanel>
+                <TextBlock Text="Install" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <TextBlock Style="{StaticResource Hint}" Text="Comma-separated winget ids, e.g. Mozilla.Firefox, 7zip.7zip, VideoLAN.VLC. 'Show catalog' lists 50+ popular apps with their ids."/>
+                <DockPanel Margin="0,10,0,0">
+                  <Button x:Name="BtnAppsInstall" DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="Install" Margin="8,0,0,0"/>
+                  <Button x:Name="BtnAppsCatalog" DockPanel.Dock="Right" Content="Show catalog" Margin="8,0,0,0"/>
+                  <TextBox x:Name="TxtAppIds" MinWidth="260"/>
+                </DockPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- MEMORY -->
+        <ScrollViewer x:Name="PageMemory" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="0,0,6,0">
+            <TextBlock Style="{StaticResource H1}" Text="Smart memory"/>
+            <TextBlock Style="{StaticResource Sub}" Text="Frees RAM held by processes that outlived their job - Gradle / Kotlin / Maven daemons after a build, MSBuild nodes, orphaned language servers, a Minecraft JVM without a window, the WSL VM. A process is stopped only when it is idle, has no window and no working child."/>
+            <Border Style="{StaticResource Panel}" Margin="0,0,0,14">
+              <StackPanel>
+                <TextBlock Text="Now" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <WrapPanel Margin="0,8,0,0">
+                  <Button x:Name="BtnMemCheck" Content="Check memory"/>
+                  <Button x:Name="BtnMemReclaim" Style="{StaticResource Primary}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Ico}" Text="&#xE945;"/><TextBlock Text="Free leftover RAM"/></StackPanel>
+                  </Button>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Panel}" Margin="0,0,0,14">
+              <StackPanel>
+                <TextBlock Text="Keep it that way" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <TextBlock Style="{StaticResource Hint}" Text="'Fix the cause' makes Gradle daemons exit after 15 idle minutes and lets WSL hand cached memory back to Windows. Automatic mode checks every 10 minutes in the background (no window, no admin rights)."/>
+                <WrapPanel Margin="0,12,0,0">
+                  <Button x:Name="BtnMemPrevent" Content="Fix the cause"/>
+                  <Button x:Name="BtnMemAutoOn" Content="Automatic mode on"/>
+                  <Button x:Name="BtnMemAutoOff" Content="Automatic mode off"/>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+            <TextBlock Style="{StaticResource Hint}" Text="Why no 'RAM booster'? Emptying working sets or the standby list only makes the number drop - the same data is then read back from disk. Standby memory is cache Windows hands out instantly."/>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- INSIGHTS -->
+        <ScrollViewer x:Name="PageInsights" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="0,0,6,0">
+            <TextBlock Style="{StaticResource H1}" Text="Insights"/>
+            <TextBlock Style="{StaticResource Sub}" Text="Measured, not guessed. Results appear in the log below."/>
+            <Border Style="{StaticResource Panel}" Margin="0,0,0,14">
+              <StackPanel>
+                <TextBlock Text="Boot time and disk forecast" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <TextBlock Style="{StaticResource Hint}" Text="Compares the boots before your last optimization with the boots after it (Mann-Whitney test): faster, slower or no measurable effect. Lists what slows startup down and forecasts when each disk runs out of space."/>
+                <WrapPanel Margin="0,12,0,0">
+                  <Button x:Name="BtnInsRun" Style="{StaticResource Primary}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Ico}" Text="&#xE9D9;"/><TextBlock Text="Analyze"/></StackPanel>
+                  </Button>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Panel}" Margin="0,0,0,14">
+              <StackPanel>
+                <TextBlock Text="Free a set amount of space" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <TextBlock Style="{StaticResource Hint}" Text="Picks the cleanup tasks that reach the target with the least side effects (exact knapsack over the last scan). Irreversible tasks are never chosen."/>
+                <WrapPanel Margin="0,10,0,0">
+                  <TextBox x:Name="TxtPlanGb" Width="80" Text="10"/>
+                  <TextBlock Text="GB" VerticalAlignment="Center" Margin="6,0,12,0"/>
+                  <Button x:Name="BtnInsPlan" Content="Show the plan"/>
+                  <Button x:Name="BtnInsApply" Content="Free it now"/>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+
         <!-- SETTINGS & ABOUT -->
         <ScrollViewer x:Name="PageAbout" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <StackPanel Margin="0,0,6,0">
@@ -2144,7 +2288,10 @@ function Set-LogOpen {
 $W.BtnLogToggle.Add_Click({ Set-LogOpen (-not $script:LogOpen) })
 
 $script:BusyButtons = @('BtnScan', 'BtnClean', 'BtnOptPreview', 'BtnOptApply', 'BtnOptRefresh', 'BtnRepScan', 'BtnHomeScan',
-    'BtnUndoLast', 'BtnUndoSel', 'BtnRestorePoint', 'BtnSchedInstall', 'BtnSchedRemove')
+    'BtnUndoLast', 'BtnUndoSel', 'BtnRestorePoint', 'BtnSchedInstall', 'BtnSchedRemove',
+    'BtnDrvCheck', 'BtnDrvInstall', 'BtnDrvHideGpu', 'BtnDrvBackup', 'BtnAppsList', 'BtnAppsUpdates', 'BtnAppsUpdateAll',
+    'BtnAppsUninstall', 'BtnAppsCatalog', 'BtnAppsInstall', 'BtnMemCheck', 'BtnMemReclaim', 'BtnMemPrevent', 'BtnMemAutoOn',
+    'BtnMemAutoOff', 'BtnInsRun', 'BtnInsPlan', 'BtnInsApply')
 
 function Set-Busy {
     param([bool]$On, [string]$Text = '')
@@ -3533,6 +3680,80 @@ function Update-Schedule {
         $script:SchedRows.Add($r)
     }
 }
+# =====================================================================
+# TOOLS PAGES (drivers / apps / memory / insights): each button runs its script
+# as a child process; the output streams into the log panel, which is opened.
+# =====================================================================
+function Start-WsTool {
+    param([string]$Script, [string[]]$Arguments = @(), [string]$Status, [string]$DoneTitle)
+    if ($script:Busy) { Set-Status (T 'Another operation is still running.'); return }
+    Set-LogOpen $true
+    # Plain script variable, not GetNewClosure(): a closure runs in its own module
+    # scope and cannot see this script's functions. Only one engine runs at a time.
+    $script:ToolDoneTitle = $DoneTitle
+    [void](Start-Engine -Script $Script -Arguments $Arguments -Status $Status -OnDone {
+        if ($args[1] -eq 0 -and $script:ToolDoneTitle) { Show-ResultBanner -Kind ok -Title $script:ToolDoneTitle -Sub (T 'Details are in the log below.') }
+    })
+}
+
+$W.BtnDrvCheck.Add_Click({ Start-WsTool $script:DriversScript @() (T 'Checking drivers (Microsoft Update can take a few minutes)...') (T 'Driver check finished.') })
+$W.BtnDrvInstall.Add_Click({
+    if (-not (Confirm-WsAction -Title (T 'Install driver updates?') -Text (T 'Every driver update from Microsoft Update except the graphics driver will be downloaded and installed. A restore point is created first; a reboot may be needed.'))) { return }
+    Start-WsTool $script:DriversScript @('-Install', 'all') (T 'Installing driver updates...') (T 'Driver updates installed.')
+})
+$W.BtnDrvHideGpu.Add_Click({ Start-WsTool $script:DriversScript @('-HideGpuUpdates') (T 'Looking for GPU driver updates to hide...') (T 'GPU driver updates hidden from Windows Update.') })
+$W.BtnDrvBackup.Add_Click({ Start-WsTool $script:DriversScript @('-Backup') (T 'Backing up drivers...') (T 'Drivers backed up.') })
+$W.BtnDrvBackupOpen.Add_Click({
+    $d = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WinSenior\DriverBackup'
+    if (-not (Test-Path -LiteralPath $d)) { Set-Status (T 'No driver backup yet.'); return }
+    Start-Process explorer.exe -ArgumentList "`"$d`""
+})
+
+$W.BtnAppsList.Add_Click({ Start-WsTool $script:AppsScript @('-List') (T 'Reading installed apps...') $null })
+$W.BtnAppsUpdates.Add_Click({ Start-WsTool $script:AppsScript @('-Updates') (T 'Checking for app updates (winget)...') (T 'Update check finished.') })
+$W.BtnAppsUpdateAll.Add_Click({
+    if (-not (Confirm-WsAction -Title (T 'Update every app?') -Text (T 'winget will silently update every app that has a newer version. Close the apps you are using first.'))) { return }
+    Start-WsTool $script:AppsScript @('-UpdateAll') (T 'Updating apps (winget)...') (T 'Apps updated.')
+})
+$W.BtnAppsUninstall.Add_Click({
+    $n = $W.TxtAppName.Text.Trim()
+    if (-not $n) { Set-Status (T 'Type the app name first.'); return }
+    if (-not (Confirm-WsAction -Title (T 'Uninstall this app?') -Text $n -DangerButton -Ok (T 'Uninstall'))) { return }
+    Start-WsTool $script:AppsScript @('-Uninstall', $n, '-RemoveLeftovers') (T 'Uninstalling...') (T 'Uninstall finished.')
+})
+$W.BtnAppsCatalog.Add_Click({ Start-WsTool $script:AppsScript @('-Catalog') (T 'Loading the catalog...') $null })
+$W.BtnAppsInstall.Add_Click({
+    $ids = @($W.TxtAppIds.Text -split '[\s,;]+' | Where-Object { $_ })
+    if (-not $ids) { Set-Status (T 'Type one or more winget ids first.'); return }
+    Start-WsTool $script:AppsScript @('-Install', ($ids -join ',')) (T 'Installing apps (winget)...') (T 'Installation finished.')
+})
+
+$W.BtnMemCheck.Add_Click({ Start-WsTool $script:MemoryScript @('-IncludeWsl') (T 'Checking memory...') $null })
+$W.BtnMemReclaim.Add_Click({
+    if (-not (Confirm-WsAction -Title (T 'Free leftover RAM?') -Text (T 'Idle build daemons and orphaned processes without a window will be stopped. They start again by themselves the next time they are needed.'))) { return }
+    Start-WsTool $script:MemoryScript @('-Reclaim', '-Unattended') (T 'Freeing leftover RAM...') (T 'Leftover RAM freed.')
+})
+$W.BtnMemPrevent.Add_Click({ Start-WsTool $script:MemoryScript @('-Prevent', '-IncludeWsl') (T 'Applying settings...') (T 'Settings applied.') })
+$W.BtnMemAutoOn.Add_Click({ Start-WsTool $script:MemoryScript @('-InstallAuto') (T 'Registering the background check...') (T 'Automatic mode is on.') })
+$W.BtnMemAutoOff.Add_Click({ Start-WsTool $script:MemoryScript @('-RemoveAuto') (T 'Removing the background check...') (T 'Automatic mode is off.') })
+
+$W.BtnInsRun.Add_Click({ Start-WsTool $script:InsightsScript @() (T 'Analyzing...') (T 'Analysis finished.') })
+function Get-WsPlanGb {
+    $v = 0.0
+    $t = ($W.TxtPlanGb.Text.Trim() -replace ',', '.')
+    if ([double]::TryParse($t, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$v) -and $v -gt 0) { return $v }
+    Set-Status (T 'Type how many GB to free.'); $null
+}
+$W.BtnInsPlan.Add_Click({
+    $gb = Get-WsPlanGb; if (-not $gb) { return }
+    Start-WsTool $script:InsightsScript @('-Plan', ([string]$gb).Replace(',', '.')) (T 'Building the plan (scans first if needed)...') $null
+})
+$W.BtnInsApply.Add_Click({
+    $gb = Get-WsPlanGb; if (-not $gb) { return }
+    if (-not (Confirm-WsAction -Title (T 'Free this space now?') -Text ((T 'The cleanup tasks with the least side effects that free {0} GB will run now. Irreversible tasks are never chosen.') -f $gb))) { return }
+    Start-WsTool $script:InsightsScript @('-Plan', ([string]$gb).Replace(',', '.'), '-Apply') (T 'Freeing space...') (T 'Cleanup finished.')
+})
+
 $W.BtnSchedInstall.Add_Click({
     [void](Start-Engine -Script $script:MenuScript -Arguments @('-InstallSchedule', '-NoElevate') -Status (T 'Installing scheduled tasks...') -OnDone {
         Update-Schedule
@@ -3638,8 +3859,10 @@ Register-WsList $W.LvStartup $W.TxtStartupFilter 4
 Register-WsList $W.LvHistory $null               3
 Register-WsList $W.LvBackups $null               0
 
-$script:NavOrder = @('NavHome', 'NavClean', 'NavOpt', 'NavRepair', 'NavStartup', 'NavHistory', 'NavUndo', 'NavSchedule', 'NavAbout')
+$script:NavOrder = @('NavHome', 'NavClean', 'NavOpt', 'NavRepair', 'NavStartup', 'NavDrivers', 'NavApps', 'NavMemory', 'NavInsights',
+                     'NavHistory', 'NavUndo', 'NavSchedule', 'NavAbout')
 $script:PageOf = @{ NavHome = 'PageHome'; NavClean = 'PageClean'; NavOpt = 'PageOpt'; NavRepair = 'PageRepair'; NavStartup = 'PageStartup'
+                    NavDrivers = 'PageDrivers'; NavApps = 'PageApps'; NavMemory = 'PageMemory'; NavInsights = 'PageInsights'
                     NavHistory = 'PageHistory'; NavUndo = 'PageUndo'; NavSchedule = 'PageSchedule'; NavAbout = 'PageAbout' }
 $script:CurrentNav = 'NavHome'
 foreach ($nav in $script:NavOrder) {
@@ -3777,7 +4000,8 @@ if ($env:WINSENIOR_GUI_PAGE -and $W[$env:WINSENIOR_GUI_PAGE] -is [System.Windows
     $Win.Add_ContentRendered({ $W[$env:WINSENIOR_GUI_PAGE].IsChecked = $true })
 }
 # Only read-only buttons may be pressed automatically - never Clean / Apply / Fix / Undo.
-$script:SafeAutoRun = @('BtnScan', 'BtnHomeScan', 'BtnOptPreview', 'BtnRepScan', 'BtnOptRefresh', 'BtnStartupRefresh', 'BtnHistRefresh', 'BtnBackupsRefresh', 'BtnSchedRefresh', 'BtnCleanOptions', 'BtnLogToggle')
+$script:SafeAutoRun = @('BtnScan', 'BtnHomeScan', 'BtnOptPreview', 'BtnRepScan', 'BtnOptRefresh', 'BtnStartupRefresh', 'BtnHistRefresh', 'BtnBackupsRefresh', 'BtnSchedRefresh', 'BtnCleanOptions', 'BtnLogToggle',
+                          'BtnMemCheck', 'BtnAppsList', 'BtnAppsCatalog', 'BtnInsRun', 'BtnDrvCheck')
 if ($env:WINSENIOR_GUI_AUTORUN) {
     if ($script:SafeAutoRun -contains $env:WINSENIOR_GUI_AUTORUN) {
         $Win.Add_ContentRendered({
