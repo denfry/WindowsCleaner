@@ -1,500 +1,298 @@
-# Windows System Cleaner and Optimizer 🧹
+# Windows Senior
 
 [![CI](https://github.com/denfry/WindowsCleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/denfry/WindowsCleaner/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-6.4.0-blue.svg)](https://github.com/denfry/WindowsCleaner)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![PowerShell](https://img.shields.io/badge/powershell-5.1%2B%20%7C%207%2B-blue.svg)](https://learn.microsoft.com/powershell/)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](https://www.microsoft.com/windows/)
-[![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVZcNUAGZt)
+[![Release](https://img.shields.io/github/v/release/denfry/WindowsCleaner?label=release)](https://github.com/denfry/WindowsCleaner/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![PowerShell 5.1 | 7](https://img.shields.io/badge/PowerShell-5.1%20%7C%207-blue.svg)](https://learn.microsoft.com/powershell/)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVZcNUAGZt)
 
-> A registry-driven Windows cleanup engine. Every operation is one declarative task;
-> a small engine resolves what to run, reclaims disk space, and deletes through
-> PowerShell's `ShouldProcess` — so **`-WhatIf` is real**, not a parallel code path.
+Disk cleanup, privacy and performance tweaks, health checks and repairs for Windows 10 and 11.
+Written in PowerShell, with a desktop app on top. Free and MIT-licensed.
 
-It cleans 110 targets across browsers, developer tools, apps, games, system caches, every
-local disk, logs, Windows Update, and driver leftovers — all from one declarative registry
-with a real dry-run mode and a hard safety guard. A companion optimization engine applies
-77 reversible system tweaks, a troubleshooting engine scans for 43 common problems and
-repairs them. Driver updates (official sources only), app uninstall / update / install via
-winget, a smart memory cleaner for leftover processes, and measured insights (boot-time
-statistics, disk-full forecast) round it out — and a single menu ties everything together.
+![Disk cleanup page after a scan](docs/images/cleanup.png)
 
-A free, open-source **Windows 10 and Windows 11 cleaner, debloater, and optimizer**, written
-in PowerShell — reclaim disk space, remove bloatware, harden privacy and telemetry, tune
-performance, and diagnose common system problems, with a real dry-run and a System Restore
-safety net. Works on desktops, laptops, and Windows Server, and runs unattended for fleets.
+| | |
+|---|---|
+| **Disk cleanup** | 110 tasks: browsers, developer tools, messengers, games, system caches, Windows Update, every local disk |
+| **Optimize** | 77 tweaks for performance, privacy, debloat and network. Each one is backed up and can be undone |
+| **Troubleshoot** | 43 read-only checks; you pick which problems to repair |
+| **Startup apps** | Turns entries on and off the way Task Manager does |
+| **Drivers** | Updates from Microsoft Update; the GPU vendor's own driver for NVIDIA, AMD and Intel graphics |
+| **Apps** | Inventory, silent uninstall with leftover cleanup, updates and installs through winget |
+| **Smart memory** | Stops idle build daemons, orphaned JVMs and the WSL VM that hold RAM |
+| **Insights** | Boot time before and after a change, a disk-full forecast, "free N GB" planning |
 
-## Contents
+The app and the console menu run the same engine scripts. Anything you do in the window
+you can also script, schedule or deploy.
 
-- [Desktop app — one command](#one-command--the-desktop-app)
-- [The console menu](#the-console-menu)
-- [Highlights](#highlights)
-- [Quick start](#quick-start)
-- [Parameters](#parameters)
-- [Risk tiers](#risk-tiers)
-- [What gets cleaned](#what-gets-cleaned)
-- [Optimization](#optimization)
-- [Troubleshooting engine](#troubleshooting)
-- [Batch version](#batch-version)
-- [Automation (GPO / SCCM / Intune)](#automation-gpo--sccm--intune--task-scheduler)
-- [Tests](#tests)
-- [Common issues (FAQ)](#common-issues-faq)
-- [License](#license)
+## Install
 
-## One command — the desktop app
-
-Open **PowerShell** (Win + X → *Terminal* / *Windows PowerShell*) and paste one line:
+Open PowerShell and paste:
 
 ```powershell
 irm https://github.com/denfry/WindowsCleaner/releases/latest/download/install.ps1 | iex
 ```
 
-That's it — no git, no zip, no admin prompt to install. The installer:
+The installer needs no admin rights. It:
 
-1. reads the latest release's `SHA256SUMS.txt`, downloads the zip over HTTPS and **refuses
-   to install if the SHA256 does not match**;
-2. puts the app in `%LOCALAPPDATA%\WinSenior\app` and adds **Windows Senior** to the Start
-   menu and the desktop;
-3. starts the app, which asks for Administrator once (UAC).
+1. reads `SHA256SUMS.txt` from the latest release and stops if the zip's hash differs;
+2. unpacks the app to `%LOCALAPPDATA%\WinSenior\app` and adds a **Windows Senior** shortcut
+   to the Start menu and the desktop;
+3. starts the app, which asks for Administrator once.
 
-Run the same line again to **update**. Options (the long form accepts parameters):
+Paste the same line again to update. For options, load the script first:
 
 ```powershell
 $i = [scriptblock]::Create((irm https://github.com/denfry/WindowsCleaner/releases/latest/download/install.ps1))
-& $i -NoLaunch        # install / update only
-& $i -Console         # open the arrow-key console menu instead of the app
-& $i -NoShortcut      # no Start menu / desktop shortcuts
-& $i -Uninstall       # remove the app, shortcuts, scheduled tasks and %ProgramFiles%\WinSenior
+& $i -NoLaunch      # install or update, don't start
+& $i -Console       # start the console menu instead of the window
+& $i -NoShortcut    # no Start menu or desktop shortcut
+& $i -Uninstall     # remove the app, shortcuts, scheduled tasks and %ProgramFiles%\WinSenior
 ```
 
-Prefer to read before running? Download `install.ps1` from the
-[latest release](https://github.com/denfry/WindowsCleaner/releases/latest) — it is ~200
-readable lines. Or work from a clone: the window is WPF, which ships with every Windows
-10/11, so nothing else is needed.
+`install.ps1` is under 300 lines; you can read it on the
+[release page](https://github.com/denfry/WindowsCleaner/releases/latest) before running it.
+
+**From a clone:**
 
 ```powershell
 git clone https://github.com/denfry/WindowsCleaner
 cd WindowsCleaner
-.\WinSenior.cmd          # or double-click it in Explorer
+.\WinSenior.cmd            # the window
+.\WinSenior.cmd console    # the arrow-key console menu
 ```
 
-`WinSenior.cmd` removes the Mark-of-the-Web from the scripts (zip downloads), asks for
-Administrator once (UAC) and opens **Windows Senior** without a console window.
-`.\WinSenior.ps1 -Gui` does the same from PowerShell; `.\WinSenior.cmd console` opens
-the arrow-key menu instead.
+Requirements: Windows 10 or 11, Windows PowerShell 5.1 or PowerShell 7. The window uses WPF,
+which ships with Windows.
 
-The app speaks **English and Russian** (it follows the Windows display language; switch it
-under *Settings*). It has nine pages:
+## The desktop app
 
-- **Overview** — the start page: computer, Windows build and uptime, a free-space bar per
-  disk, the last cleanup, how many tweaks are applied and how many apps start with Windows,
-  plus the recent runs. **Smart scan** measures the junk (cleanup dry run) and runs the
-  read-only health checks in one go; *Clean now* and *Review* act on the result.
-- **Disk cleanup** — tasks grouped by category (collapsible, with *select all / none* per
-  group) and a risk badge each. *Scan* runs the real `-WhatIf` dry run and fills a
-  "Would free" column; *Clean now* runs the ticked tasks after a confirmation with the
-  estimate. *Options* opens restore point, close running browsers, delete locked files at
-  reboot, Conservative, current user only, skip SFC/DISM, minimum file age and disks.
-  Dangerous tasks are never pre-ticked. Hover a task to see exactly which folders it touches.
-- **Optimize** — tweaks grouped by area with their live *Applied / Not applied* state (read
-  in the background, the window never freezes); preview or apply, restore point first, every
-  applied tweak is backed up.
-- **Troubleshoot** — read-only scan with problem / warning / healthy counters and the detail
-  per check; tick the problems to repair and press *Fix selected*, or fix everything.
-- **Startup apps** — everything that starts with Windows (Run keys, Startup folders) with an
-  on/off switch that disables it exactly the way Task Manager does — the entry is kept, so
-  switching it on restores it.
-- **History** — every run's report (app and scheduled), all-time total freed; double-click a
-  run to open it as a web page.
-- **Undo & restore** — optimization backups (undo newest or a chosen one), create a System
-  Restore point, open System Restore, open log folders.
-- **Schedule** — install/remove the recurring Task Scheduler jobs, see their state, next and
-  last run.
-- **Settings & about** — language, versions, counts, paths, keyboard shortcuts.
+![Optimize page with the live state of each tweak](docs/images/optimize.png)
 
-After every run a banner sums up the result; the engine output streams into a log drawer
-(*Log* button or Ctrl+L — resizable, saveable). Shortcuts: Ctrl+1…9 switch pages, Ctrl+F
-search, F5 scan/refresh. Without administrator rights a banner offers *Restart as
-administrator*. The app never re-implements deletion: it launches the same engine scripts
-with parameters, so `-WhatIf`, the safety guard, restore points and undo are exactly the
-ones documented below. Selections, options, language and window size persist in
-`%ProgramData%\WinSenior\gui-settings.json`.
+The window follows the Windows display language (English or Russian; you can switch it
+under *Settings*).
 
-## The console menu
+- **Overview** shows disks, the last cleanup and recent runs. *Smart scan* measures the
+  junk and runs the health checks in one pass.
+- **Disk cleanup** groups tasks by category with a risk badge on each. *Scan* is a real
+  dry run and fills in *Would free*. Hover a task to see the folders it touches. The app
+  never pre-ticks a Dangerous task.
+- **Optimize** reads the current state of every tweak in the background. Applying one
+  creates a restore point and a backup first.
+- **Troubleshoot** scans without changing anything, then repairs only what you tick.
+- **History**, **Undo & restore** and **Schedule** cover past runs, backups and the
+  recurring tasks.
 
-`WinSenior.ps1` is the console entry point. Run it (it self-elevates) and an interactive
-menu opens with detailed screens for cleanup, optimization, troubleshooting, undo, a
-restore point and a task/tweak/check listing. It drives all three engines, so every action
-keeps real `-WhatIf`, the safety guard and per-tweak undo.
+Ctrl+1…9 switch pages, Ctrl+F searches, F5 scans, Ctrl+L opens the log. The app keeps
+your selections in `%ProgramData%\WinSenior\gui-settings.json`.
 
-The menu is **arrow-key driven**: <kbd>↑</kbd>/<kbd>↓</kbd> move the highlight,
-<kbd>Enter</kbd> selects, <kbd>Space</kbd> toggles a task/tweak on the detailed screens,
-and <kbd>Esc</kbd> goes back. Add `-Plain` for terminals that can't render box-drawing
-characters (ASCII `+ - |` borders instead).
+## Safety
+
+- **Dry run.** `-WhatIf` goes through PowerShell's `ShouldProcess`, the same path as a real
+  run, so the preview and the cleanup can't drift apart.
+- **Restore point.** Each engine creates a System Restore point before changing anything.
+  It uses the `SystemRestore` WMI class, so it works in PowerShell 7 too.
+- **Protected paths.** The engine refuses drive roots, Windows, Program Files, ProgramData,
+  every user profile and its known folders (Documents, Desktop, Downloads and the rest),
+  and any folder that contains one of them.
+- **Links.** A junction or symlink inside a cleaned folder is removed as a link. The engine
+  never follows it to the target.
+- **Risk tiers.** Safe, Moderate and Aggressive tasks run by default. Irreversible ones
+  (event logs, `Windows.old`, the patch cache, old drivers) need `-IncludeDangerous`.
+- **Undo.** Every tweak is written to a backup manifest before it is applied;
+  `Optimize-Windows-Senior.ps1 -Undo` reverts a whole run.
+- **App leftovers** go to a quarantine for 30 days. Folders that still hold programs or
+  another installed app stay where they are.
+
+Start with `-WhatIf` on a machine you care about.
+
+## Command line
+
+Run the scripts from an elevated PowerShell. Each one supports `-WhatIf` and
+`-ReportPath <file.json>`.
+
+### Cleanup
 
 ```powershell
-.\WinSenior.ps1
-.\WinSenior.ps1 -Plain   # ASCII-only borders
-```
-
-## Highlights
-
-- **One source of truth.** Every cleanup target is a single entry in a task registry
-  (`-ListTasks` prints it). Adding a target is one line; nothing else to wire up.
-- **Real `-WhatIf` / `-DryRun`.** Implemented through `SupportsShouldProcess`. Preview
-  shows exactly what would be removed and reports honest would-free totals.
-- **Real restore point.** The `SystemRestore` WMI class actually creates a System Restore
-  point under both Windows PowerShell 5.1 and PowerShell 7 (the 24-hour throttle is lifted
-  for that one checkpoint and then put back) — non-interactive, safe for automation.
-- **Links are never followed.** A junction or symlink inside a cleaned folder is removed as
-  a link; its target is never enumerated, counted or deleted.
-- **Honest accounting.** Reclaimed bytes are summed from items that were actually
-  removed, not estimated and not counted from log lines. Partially-deleted folders count
-  only what actually went away.
-- **Locked files don't win.** `-DeferLocked` queues anything in use for deletion at the
-  next reboot through `MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)` — the same mechanism
-  Windows Installer uses — instead of reporting an error. Age-filtered runs also prune the
-  empty folder skeletons they leave behind.
-- **A safety guard that can't be argued with.** `Test-SafeToDelete` refuses to operate on
-  drive roots, `%WINDIR%`, `%USERPROFILE%`, `C:\Users`, `System32`, or any path shallower
-  than two levels — defends against a bad registry entry or an unexpanded variable.
-- **Risk tiers.** Safe / Moderate / Aggressive run by default; irreversible operations
-  live in a Dangerous tier behind `-IncludeDangerous`.
-- **~15 parameters** with short aliases, plus per-user (`<USER>`) and per-disk (`<DRIVE>`)
-  path expansion.
-
-## Quick start
-
-```powershell
-# Preview everything (no changes, real ShouldProcess)
-.\Cleanup-Windows-Senior.ps1 -WhatIf
-
-# Default aggressive cleanup, all users, with a real restore point first
-.\Cleanup-Windows-Senior.ps1
-
-# Just browser + developer-tool caches
+.\Cleanup-Windows-Senior.ps1 -WhatIf                         # preview, change nothing
+.\Cleanup-Windows-Senior.ps1                                 # default run, all users, restore point first
 .\Cleanup-Windows-Senior.ps1 -Category Browsers,DevTools
-
-# Clean drive-level junk on specific local disks only
 .\Cleanup-Windows-Senior.ps1 -Category Disks -Drives C,D
-
-# Non-interactive for scheduled tasks / GPO / SCCM / Intune
 .\Cleanup-Windows-Senior.ps1 -Unattended -NoRestorePoint -SkipOptimization
-
-# Everything, including the irreversible tier, with a JSON report
-.\Cleanup-Windows-Senior.ps1 -IncludeDangerous -ReportPath C:\Logs\clean.json
-
-# One-time execution-policy bypass
-powershell.exe -ExecutionPolicy Bypass -File .\Cleanup-Windows-Senior.ps1 -WhatIf
+.\Cleanup-Windows-Senior.ps1 -ListTasks                      # every task with id, category and tier
 ```
-
-Run as Administrator. PowerShell 5.1+ (7+ recommended).
-
-## Parameters
 
 | Parameter | Alias | Effect |
 |-----------|-------|--------|
-| `-Category <names>` | | Limit to: Browsers, DevTools, Apps, Games, System, Disks, Logs, Updates, Optimization |
-| `-Include <ids>` | | Force tasks on (ids from `-ListTasks`) — overrides category and risk cap |
-| `-Exclude <ids>` | | Force tasks off — wins over everything |
-| `-IncludeDangerous` | | Also run the irreversible tier (event logs, patch cache, Windows.old, old drivers) |
-| `-Conservative` | `-SafeMode` | Cap at Safe + Moderate (skip Aggressive) |
-| `-CurrentUserOnly` | `-cu` | Clean only the current profile (default: all users) |
-| `-Drives <letters>` | | Local disks for drive-level cleanup, e.g. `-Drives C,D` (default: all local disks) |
-| `-WhatIf` / `-DryRun` | `-dr` | Preview only, change nothing |
-| `-Unattended` | `-Force`, `-f` | No prompts, no GUI — for automation |
-| `-NoRestorePoint` | `-nrp` | Skip the restore point that is otherwise created first |
-| `-SkipOptimization` | `-so` | Skip the slow SFC / DISM category |
-| `-MaxAgeDays <n>` | | Only delete files older than n days |
-| `-DeferLocked` | `-dl` | Locked/in-use files are scheduled for deletion at next reboot (MoveFileEx) instead of counted as errors |
-| `-LogPath <path>` | | Text log (default `%TEMP%\WindowsCleanup.log`) |
-| `-ReportPath <path>` | | Write a machine-readable JSON report |
-| `-ListTasks` | | Print the task registry and exit |
-| `-Help` | | Show usage |
+| `-Category <names>` | | Browsers, DevTools, Apps, Games, System, Disks, Logs, Updates, Optimization |
+| `-Include <ids>` | | Run these tasks regardless of category and tier |
+| `-Exclude <ids>` | | Skip these tasks; wins over everything else |
+| `-IncludeDangerous` | | Allow the irreversible tier |
+| `-Conservative` | `-SafeMode` | Safe and Moderate only |
+| `-CurrentUserOnly` | `-cu` | Only the current profile (default: all users) |
+| `-Drives <letters>` | | Disks for drive-level cleanup (default: all local disks) |
+| `-WhatIf` / `-DryRun` | `-dr` | Preview only |
+| `-Unattended` | `-Force`, `-f` | No prompts |
+| `-NoRestorePoint` | `-nrp` | Skip the restore point |
+| `-SkipOptimization` | `-so` | Skip SFC and DISM |
+| `-MaxAgeDays <n>` | | Only files older than n days |
+| `-DeferLocked` | `-dl` | Delete locked files at the next reboot (`MoveFileEx`) |
+| `-CloseApps` | | Close running browsers first (current session only) |
+| `-LogPath <path>` | | Text log, default `%TEMP%\WindowsCleanup.log` |
+| `-ReportPath <path>` | | JSON report |
 
-## Risk tiers
+| Tier | Default | Examples |
+|------|---------|----------|
+| Safe | on | browser caches, temp folders, thumbnails, dev and app caches, shader caches |
+| Moderate | on | recycle bin, crash dumps, font cache, Windows Update download cache |
+| Aggressive | on | full SoftwareDistribution reset, DISM component cleanup, SFC |
+| Dangerous | `-IncludeDangerous` | event logs, `$PatchCache$`, `Windows.old`, superseded drivers |
 
-| Tier | Runs by default? | Examples |
-|------|------------------|----------|
-| **Safe** | yes | browser caches, temp, thumbnails, dev/app/messenger caches, shader cache |
-| **Moderate** | yes | recycle bin, crash dumps, font cache, WU download cache, DISM cleanup |
-| **Aggressive** | yes | full SoftwareDistribution reset, prefetch, DISM `/ResetBase`, SFC |
-| **Dangerous** | only with `-IncludeDangerous` | clear event logs, `$PatchCache$`, Windows.old, remove superseded drivers |
+<details>
+<summary>What each category cleans</summary>
 
-`-Conservative` lowers the default ceiling to Moderate. `-Include` can force any single
-task on regardless of tier.
+- **Browsers**: Chrome, Edge, Firefox, Opera, Yandex, Brave, Vivaldi, all profiles.
+- **DevTools**: npm, pnpm, Yarn, pip, uv, poetry, NuGet, Gradle, Maven, Go, cargo, Pub,
+  winget, Chocolatey, Scoop, conda, VS Code, JetBrains, Visual Studio, Docker and WSL logs.
+  ML model and browser-automation caches (Hugging Face, torch, Playwright) are off by default.
+- **Apps**: UWP caches, Teams, Discord, Slack, Spotify, Telegram, WhatsApp, Zoom, other
+  Electron apps, Office and OneDrive caches, Adobe media cache, GPU vendor apps.
+- **Games**: Steam, Epic, Battle.net, GOG, EA, Ubisoft, Riot and Xbox launcher caches and
+  logs; Unreal, Unity and Godot caches; per-game shader caches on every disk.
+- **System**: user and Windows temp, service-account temp, thumbnail and icon caches,
+  D3D and GPU shader caches, Delivery Optimization, setup and servicing logs, Defender scan
+  cache, DNS flush. Superseded driver packages (Dangerous) skip boot-critical drivers.
+- **Disks**: `Temp`, `tmp` and CHKDSK `FOUND.*` on every local disk.
+- **Logs**: Windows Error Reporting, crash and memory dumps, IIS logs older than 14 days,
+  recycle bins, event logs (Dangerous).
+- **Updates**: Windows Update download cache, SoftwareDistribution reset, patch cache and
+  `Windows.old` (Dangerous).
+- **Optimization**: DISM analyze and component cleanup, SFC.
 
-## What gets cleaned
+</details>
 
-`-ListTasks` shows the live list. Categories:
-
-- **Browsers** — Chrome, Edge, Firefox, Opera, Yandex, Brave (all profiles, cache /
-  code cache / GPU cache / service-worker cache).
-- **DevTools** — npm, pip, Yarn, NuGet http cache, Gradle, VS Code, JetBrains
-  (caches/logs/temp), Visual Studio (ComponentModelCache, IntelliCode logs, telemetry),
-  Nuitka, Go build cache, Dart/Flutter Pub cache, package-manager caches (winget, Chocolatey,
-  Scoop, conda, cargo, Go module cache), Python tools (uv, poetry, pipx, pyenv), JVM
-  wrappers (Maven/Gradle dists, sbt boot, kotlin daemon), .NET SDK temp & telemetry, Node
-  toolchain (node-gyp, electron, bun, deno, Cypress), GitHub Desktop, Composer, Docker
-  Desktop/WSL logs, `pnpm store prune`, `docker system prune`, and — off by default — ML model
-  & browser-automation caches (HuggingFace, torch, Playwright, Puppeteer).
-- **Apps** — Windows app/UWP caches & temp state, Microsoft Teams (classic + new), Discord,
-  Slack, Spotify, Telegram, WhatsApp, Zoom/Skype/Signal/Viber, a generic sweep of every
-  Electron/Chromium app cache under AppData (Moderate), media players (VLC, WMP, Plex), Office
-  document/web cache, OneDrive logs, Adobe media & Camera Raw cache, RDP bitmap cache,
-  notification image cache, GPU vendor apps (NVIDIA App / GeForce Experience / AMD / Intel).
-- **Games** — launcher caches for Steam (shader/http/html), Epic, Battle.net, GOG; launcher
-  logs & crash dumps (Steam, Epic, EA, Ubisoft, Riot, Xbox); engine caches (Unreal DDC, Unity,
-  Godot); per-game shader caches on every disk (Aggressive).
-- **System** — user/Windows temp, service-account temps (LocalService / NetworkService /
-  system profile), WinINet cache, thumbnail & icon cache, GPU/D3D shader cache, GPU driver
-  installer leftovers (NVIDIA/AMD), WebCache, Delivery Optimization, BITS transfer queue,
-  setup/upgrade/servicing logs (Panther, CBS, USO, WindowsUpdate.log), Offline Web Pages,
-  Defender scan cache, PerfLogs, recent items, font cache, Windows logs, prefetch, DNS/ARP/
-  NetBIOS flush, silent Store cache reset, standby-memory purge (frees RAM), Windows Search
-  index rebuild (Aggressive, off by default), and removal of superseded driver packages via
-  pnputil (Dangerous; boot-critical and in-use drivers are never touched).
-- **Logs** additions — setup logs (Panther/setupapi), Defender scan history, diagnostics &
-  telemetry caches (Diagnosis, ETL traces, SleepStudy, WDI), third-party app logs (Adobe,
-  Autodesk, Corsair, Logitech, Razer, Intel, PowerToys, Terminal), installer leftovers (MSI
-  temp, Squirrel/NSIS/Inno, Chrome/Edge updater downloads), empty-folder pruning in temp.
-- **Updates** additions (Dangerous, off by default) — disable hibernation & delete
-  `hiberfil.sys`; delete all but the newest restore point / shadow copy.
-- **Disks** — drive-level cleanup across **every local disk** (C:, D:, E: …): per-drive
-  `Temp`/`tmp` scratch folders and CHKDSK `FOUND.*` fragments. Recycle Bins on all drives
-  are emptied by the Logs task. Restrict with `-Drives C,D`.
-- **Logs** — Windows Error Reporting, crash & memory dumps, old IIS logs (>14 days),
-  Recycle Bin (all drives), event-log clearing (Dangerous).
-- **Updates** — Windows Update download cache (services stopped correctly), full
-  SoftwareDistribution reset, patch cache (Dangerous), Windows.old & upgrade leftovers (Dangerous).
-- **Optimization** — DISM analyze / component cleanup / reset base, StartComponentCleanup
-  task, SFC. Skipped entirely with `-SkipOptimization`.
-
-## Optimization
-
-`Optimize-Windows-Senior.ps1` is a second registry-driven engine that changes Windows
-settings instead of deleting files. Every tweak is one declarative entry; the engine
-snapshots prior state into a backup manifest before applying, so `-Undo` reverts an entire
-run. A real restore point is created first as a second safety net.
+### Optimize
 
 ```powershell
-# Preview every tweak (no changes, real ShouldProcess)
 .\Optimize-Windows-Senior.ps1 -WhatIf
-
-# Apply the default privacy + performance set
 .\Optimize-Windows-Senior.ps1 -Area Privacy,Performance
-
-# Revert the most recent run
-.\Optimize-Windows-Senior.ps1 -Undo
+.\Optimize-Windows-Senior.ps1 -Undo                          # revert the newest run
+.\Optimize-Windows-Senior.ps1 -ListTweaks
 ```
 
-It covers 77 tweaks across four areas (including modern Windows 11 items — Recall/Copilot,
-tailored-ads and Spotlight, inking/typing & speech telemetry, and the taskbar/Start ad
-surfaces):
+Areas: Performance, Privacy (telemetry, advertising ID, Recall, Copilot, Spotlight, typing
+and speech data), Debloat (preinstalled apps, Start and taskbar ads) and Network. Tweaks
+that people disagree on ship switched off. The engine never turns off Defender real-time
+protection or Windows Update, and never removes Edge or the Store. Removed UWP apps come
+back from the Store; the backup manifest lists them.
 
-- **Performance** — visual effects to best performance, zero menu/startup delay,
-  High-Performance power plan, background apps off; (off by default) Ultimate plan,
-  SysMain / Windows Search off, hibernation off.
-- **Privacy** — telemetry policy, advertising ID, consumer features, tips/spotlight,
-  activity feed, Start web search and Cortana off; DiagTrack and dmwappushservice disabled;
-  CEIP / telemetry scheduled tasks off.
-- **Debloat** — curated junk UWP removal (default on); Xbox and comms apps (off by default);
-  Start-menu app suggestions off.
-- **Network** — GameDVR off, Game Mode on, network-throttling and multimedia reservation off;
-  (off by default) Nagle off, NDU service off.
-
-Debatable tweaks ship off by default — allowed by their tier but only applied when you toggle
-them on or `-Include` them. The engine never disables Defender real-time protection, never
-breaks Windows Update or the network stack wholesale, and never removes Edge or the Store.
-Removing UWP apps is partially irreversible; the manifest lists what to reinstall from the
-Store. `-ListTweaks` prints the live list, and `-Undo` reverts a run from its backup manifest
-(newest in `%ProgramData%\WinSenior\backups`, or a specific one with `-BackupManifest`).
-
-## Troubleshooting
-
-`Repair-Windows-Senior.ps1` is a third engine that diagnoses and repairs system health.
-Every check is one declarative entry: a read-only scan that returns OK / Warn / Fail, and an
-optional fix. The default flow is scan-then-choose — it scans (changing nothing), prints a
-health report, and lets you pick which detected issues to repair. Fixes run through
-`ShouldProcess` after a real restore point.
+### Troubleshoot
 
 ```powershell
-# Scan, show the report, then choose what to repair
-.\Repair-Windows-Senior.ps1
-
-# Diagnose only - never change anything
+.\Repair-Windows-Senior.ps1                    # scan, report, then choose what to fix
 .\Repair-Windows-Senior.ps1 -ScanOnly
-
-# Non-interactive: auto-apply every fixable issue, including heavy repairs
 .\Repair-Windows-Senior.ps1 -FixAll -IncludeHeavy -Unattended
 ```
 
-It runs 43 checks across eight categories — including security checks (firewall state, SMBv1,
-hosts-file and proxy/PAC hijack, Defender signatures), a System Restore safety-net check, print
-spooler / BITS / Store health, and predictive SSD wear & crash-history reporting, plus the
-originals: system image health (DISM), physical disk SMART
-health, low free space, volumes flagged for chkdsk, pending reboot, Windows Update components,
-internet & DNS, devices with driver errors, stopped critical services, Microsoft Defender
-health, WMI repository consistency, time synchronization, and recent critical/error events.
+The checks cover image health (DISM), SMART, free space, dirty volumes, pending reboot,
+Windows Update, network and DNS, proxy and hosts hijacks, firewall, SMBv1, Defender,
+drivers with errors, critical services, WMI, time sync and recent critical events. SFC,
+DISM RestoreHealth, the Windows Update reset and the network reset run only when you pick
+them or pass `-IncludeHeavy`.
 
-Heavy repairs (SFC, DISM RestoreHealth, Windows Update reset, network stack reset) are included
-but only run when you select them, or pass `-FixAll -IncludeHeavy`. Repairs only ever improve
-health — the engine *enables* Defender real-time protection, it never disables it. `-ListChecks`
-prints the live list.
-
-## Drivers, apps, memory — no extra downloads
-
-Each of these is its own script, and the console menu has a screen for every one. They use
-official sources only: Microsoft Update, `winget`, and the GPU vendor's own site.
+### Drivers, apps, memory, insights
 
 ```powershell
-# Drivers: GPU status, devices with errors, updates from Microsoft Update
-.\WinSenior.Drivers.ps1
-.\WinSenior.Drivers.ps1 -Install all          # every update except the GPU driver
-.\WinSenior.Drivers.ps1 -HideGpuUpdates       # stop Windows Update replacing the vendor GPU driver
-.\WinSenior.Drivers.ps1 -Backup               # pnputil export to Documents\WinSenior\DriverBackup
+.\WinSenior.Drivers.ps1                        # GPU status, devices with errors, available updates
+.\WinSenior.Drivers.ps1 -Install all           # everything except the GPU driver
+.\WinSenior.Drivers.ps1 -Backup                # pnputil export
 
-# Apps: inventory, silent uninstall + leftovers, winget updates / installs
 .\WinSenior.Apps.ps1 -List
-.\WinSenior.Apps.ps1 -Updates                 # or -UpdateAll
-.\WinSenior.Apps.ps1 -Uninstall 'App name' -RemoveLeftovers   # leftovers go to a 30-day quarantine
-.\WinSenior.Apps.ps1 -Catalog                 # then: -Install Mozilla.Firefox,7zip.7zip
+.\WinSenior.Apps.ps1 -UpdateAll
+.\WinSenior.Apps.ps1 -Uninstall 'App name' -RemoveLeftovers
+.\WinSenior.Apps.ps1 -Install Mozilla.Firefox,7zip.7zip
 
-# Smart memory: free RAM held by leftovers (build daemons, orphaned Java/Node, WSL)
-.\WinSenior.Memory.ps1                        # report
 .\WinSenior.Memory.ps1 -Reclaim
-.\WinSenior.Memory.ps1 -Prevent -IncludeWsl   # Gradle idle timeout + WSL autoMemoryReclaim
-.\WinSenior.Memory.ps1 -InstallAuto           # background check every 10 minutes
+.\WinSenior.Memory.ps1 -InstallAuto            # check every 10 minutes
 
-# Insights: did the optimization help, when is the disk full, free N GB the gentle way
 .\WinSenior.Insights.ps1
-.\WinSenior.Insights.ps1 -Plan 20 -Apply
+.\WinSenior.Insights.ps1 -Plan 20 -Apply       # free 20 GB with the least side effects
 ```
 
-**Why the GPU driver is handled differently.** For gaming, the NVIDIA, AMD and Intel drivers are
-newer than the ones Windows Update ships, and they come with the game profiles. So WinSenior
-shows your GPU, how old its driver is, and the vendor's official page. Windows Update supplies
-everything else.
+**GPU drivers.** For games, the NVIDIA, AMD and Intel drivers from the vendor are newer
+than the Windows Update ones and include the game profiles. WinSenior shows how old your
+GPU driver is and links to the vendor's page. Windows Update handles the other devices.
 
-**Why there is no "RAM booster".** Emptying working sets or the standby list makes the
-used-memory number drop, but the same pages then fault straight back in from disk. Standby
-memory is cache that Windows hands out instantly. What really keeps RAM busy is processes that
-outlive their job, and those are what the memory module finds:
-- Gradle and Kotlin daemons after a mod build.
-- MSBuild nodes.
-- `vmmem`, the WSL virtual machine.
-- A Minecraft JVM left without a window.
+**No "RAM booster".** Emptying working sets makes the number drop, then Windows reads the
+same pages back from disk. The memory module looks for processes that outlived their job:
+Gradle and Kotlin daemons, MSBuild nodes, a Minecraft JVM without a window, `vmmem`. It
+stops a process only when it has been idle, has no window and has no busy child process.
 
-A process is only stopped when it has been idle (it used almost no CPU over the check window),
-has no window, and has no child process still working. Graceful stop commands run first.
+**Statistics.** Boot times come from event 100. Insights compares boots before and after
+your last optimization with a Mann–Whitney U test and reports the Hodges–Lehmann shift.
+The disk forecast fits a Theil–Sen trend. "Free N GB" solves a 0/1 knapsack over the
+cleanup tasks.
 
-**How the statistics work.**
-- **Boot time:** Windows records it in event 100. The boots before your last optimization are
-  compared with the boots after it, using a Mann–Whitney U test and a Hodges–Lehmann shift.
-  The first boot after the change and boots after updates are excluded. You get *Improved*,
-  *Worse*, or *no measurable effect* (inside ±5 %).
-- **Disk forecast:** a Theil–Sen trend, with cleanups split out as jumps.
-- **"Free N GB":** solves an exact 0/1 knapsack. It picks the set of cleanup tasks that reaches
-  the target with the least side effects (risk tier, plus re-download or rebuild cost).
-
-## Batch version
-
-`Cleanup-Windows-Senior.bat` is the simple, dependency-free alternative. v6 brings it to
-parity with the engine's defaults and fixes the old bugs (each browser flag is now
-independent; real all-users iteration; Windows Update services stopped in the right order).
-The Dangerous tier is behind `/IncludeDangerous`; a real restore point is opt-in via
-`/RestorePoint`. Run `Cleanup-Windows-Senior.bat /?` for options. The PowerShell version is
-recommended — it has real `-WhatIf`, finer control, and the safety guard.
-
-```cmd
-Cleanup-Windows-Senior.bat /DryRun
-Cleanup-Windows-Senior.bat /CurrentUserOnly /nch /nff
-Cleanup-Windows-Senior.bat /IncludeDangerous /RestorePoint
-```
-
-## Automation (GPO / SCCM / Intune / Task Scheduler)
-
-The `-Unattended` switch makes the run fully non-interactive (no prompts, no GUI) — the
-restore point is created programmatically with `Checkpoint-Computer`, so nothing blocks.
+## Automation
 
 ```powershell
-# Startup script / scheduled task
 powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden `
   -File "C:\Scripts\Cleanup-Windows-Senior.ps1" -Unattended -SkipOptimization `
   -LogPath "C:\Logs\cleanup.log" -ReportPath "C:\Logs\cleanup.json"
 ```
 
-Exit codes: `0` success, `2` administrator privileges required.
+Exit codes: `0` success, `2` administrator rights required.
 
-### Recurring maintenance — one command
-
-`WinSenior.ps1` can register the recurring tasks for you (run as Administrator;
-it self-elevates):
-
-```powershell
-.\WinSenior.ps1 -InstallSchedule   # register the maintenance tasks
-.\WinSenior.ps1 -RemoveSchedule    # remove them
-```
-
-This creates two Task Scheduler jobs under `\WinSenior\`, running as SYSTEM:
+`.\WinSenior.ps1 -InstallSchedule` registers two tasks under `\WinSenior\` that run as
+SYSTEM from a copy in `%ProgramFiles%\WinSenior`; `-RemoveSchedule` removes them.
 
 | Task | When | What |
 |------|------|------|
-| **WinSenior Weekly Cleanup** | Weekly, Sun 03:00 | unattended cleanup, no restore point, skips slow SFC/DISM |
-| **WinSenior Monthly Health Scan** | Monthly, 1st 03:30 | read-only health scan (changes nothing) |
+| WinSenior Weekly Cleanup | Sunday 03:00 | unattended cleanup without SFC and DISM |
+| WinSenior Monthly Health Scan | 1st of the month, 03:30 | read-only scan |
 
-Both write JSON reports to `%ProgramData%\WinSenior\reports`.
-
-### Report format
-
-Every engine's `-ReportPath` writes the same envelope, so one parser reads them all:
+Both write JSON reports to `%ProgramData%\WinSenior\reports`. All engines use one format:
 
 ```json
 {
-  "Tool": "WinSenior", "Version": "6.4.0", "Engine": "Cleanup",
-  "Host": "PC01", "Timestamp": "2026-06-24T03:00:11", "Mode": "Live",
+  "Tool": "WinSenior", "Version": "6.5.1", "Engine": "Cleanup",
+  "Host": "PC01", "Timestamp": "2026-11-05T03:00:11", "Mode": "Live",
   "RestorePoint": true, "DurationSec": 42.3,
   "Summary": { "TotalFreed": "1.20 GB", "TotalFiles": 8123, "TotalErrors": 2 },
-  "Items": [ /* per-task / per-tweak / per-check detail */ ]
+  "Items": []
 }
 ```
 
-`Summary` holds the engine's counters (cleanup: freed bytes/files; optimize:
-applied/skipped; repair: fixed/reboot), and `Items` the per-unit breakdown.
+`Cleanup-Windows-Senior.bat` covers the same default cleanup for machines where PowerShell
+scripts are blocked. Run it with `/?` for options.
 
-## Tests
+## FAQ
 
-The `tests\*.Tests.ps1` files cover the pure logic of all three engines — selection, the
-safety guard, age filtering, formatting, `-WhatIf` accounting, a registry backup→apply→undo
-round-trip against a throwaway hive, and the troubleshooter's scan/fix dispatch. Requires
-Pester 5+:
+**"Running scripts is disabled on this system."** Use
+`powershell.exe -ExecutionPolicy Bypass -File ...`, or run
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+
+**No restore point was created.** System Protection is off for the system drive. Turn it
+on with `Enable-ComputerRestore -Drive "C:\"` or pass `-NoRestorePoint`.
+
+**Some items report errors.** The files were in use, usually by an open browser. Close it
+and run again, or add `-DeferLocked`.
+
+**Nothing happened.** The script needs Administrator; it exits with code 2 without it.
+
+## Development
 
 ```powershell
-Invoke-Pester -Path .\tests
+Invoke-Pester -Path .\tests                       # Pester 5
+Invoke-ScriptAnalyzer -Path . -Severity Error
 ```
 
-## Common issues (FAQ)
-
-- **"running scripts is disabled"** — `powershell.exe -ExecutionPolicy Bypass -File ...`
-  or `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
-- **Restore point not created** — System Protection is off for the system drive. Enable it
-  (`Enable-ComputerRestore -Drive "C:\"`) or run with `-NoRestorePoint`.
-- **Some items report errors** — they were locked/in use (e.g. an open browser). Close the
-  app and re-run; the engine counts these and continues.
-- **Nothing happens** — check you ran as Administrator (exit code 2 otherwise).
+CI runs both on every push. See [CONTRIBUTING.md](CONTRIBUTING.md) for how tasks, tweaks
+and checks are declared, and [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## License
 
-MIT © 2026 denfry. See [LICENSE](LICENSE).
+MIT © 2026 [denfry](https://github.com/denfry). See [LICENSE](LICENSE).
 
-## Author
-
-**denfry** — [github.com/denfry](https://github.com/denfry)
-
----
-
-### 🔒 Safety note
-
-This tool deletes files and, in the Dangerous tier, makes irreversible changes. Always
-start with `-WhatIf`. Keep the default restore point on for important systems. The authors
-are not responsible for data loss from improper use — ensure you have backups.
+This tool deletes files and changes system settings. The Dangerous tier can't be undone.
+Keep backups.
