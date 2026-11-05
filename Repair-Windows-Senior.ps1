@@ -21,7 +21,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.3.0
+    Version : 6.5.0
     Requires: PowerShell 5.1+ (Windows). Administrator rights.
 
 .EXAMPLE
@@ -606,6 +606,8 @@ function Get-DiagnosticCheckRegistry {
                 $wsus = Get-RepRegValue $pol 'WUServer'
                 if ($wsus -and (Get-RepRegValue $au 'UseWUServer') -eq 1 -and -not $domain) { $fail += "WSUS server '$wsus' on a non-domain PC" }
                 if ((Get-RepRegValue $au 'NoAutoUpdate') -eq 1) { $warn += 'NoAutoUpdate=1' }
+                # Left behind by "tweaker" tools: no driver ever arrives from Windows Update.
+                if ((Get-RepRegValue $pol 'ExcludeWUDriversInQualityUpdate') -eq 1) { $warn += 'driver updates blocked (ExcludeWUDriversInQualityUpdate=1)' }
                 $exp = Get-RepRegValue 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings' 'PauseUpdatesExpiryTime'
                 if ($exp) {
                     try {
@@ -643,6 +645,7 @@ function Get-DiagnosticCheckRegistry {
                     Remove-ItemProperty -LiteralPath $au -Name 'UseWUServer' -ErrorAction SilentlyContinue
                 }
                 Remove-ItemProperty -LiteralPath $au -Name 'NoAutoUpdate' -ErrorAction SilentlyContinue
+                Remove-ItemProperty -LiteralPath $pol -Name 'ExcludeWUDriversInQualityUpdate' -ErrorAction SilentlyContinue
                 $exp = Get-RepRegValue $ux 'PauseUpdatesExpiryTime'
                 if ($exp) {
                     foreach ($n in 'PauseUpdatesExpiryTime', 'PauseUpdatesStartTime', 'PauseFeatureUpdatesStartTime', 'PauseFeatureUpdatesEndTime',

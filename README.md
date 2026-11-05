@@ -11,11 +11,13 @@
 > a small engine resolves what to run, reclaims disk space, and deletes through
 > PowerShell's `ShouldProcess` — so **`-WhatIf` is real**, not a parallel code path.
 
-It cleans 106 targets across browsers, developer tools, apps, games, system caches, every
+It cleans 110 targets across browsers, developer tools, apps, games, system caches, every
 local disk, logs, Windows Update, and driver leftovers — all from one declarative registry
 with a real dry-run mode and a hard safety guard. A companion optimization engine applies
 77 reversible system tweaks, a troubleshooting engine scans for 43 common problems and
-repairs them, and a single menu ties everything together.
+repairs them. Driver updates (official sources only), app uninstall / update / install via
+winget, a smart memory cleaner for leftover processes, and measured insights (boot-time
+statistics, disk-full forecast) round it out — and a single menu ties everything together.
 
 A free, open-source **Windows 10 and Windows 11 cleaner, debloater, and optimizer**, written
 in PowerShell — reclaim disk space, remove bloatware, harden privacy and telemetry, tune
@@ -339,6 +341,61 @@ Heavy repairs (SFC, DISM RestoreHealth, Windows Update reset, network stack rese
 but only run when you select them, or pass `-FixAll -IncludeHeavy`. Repairs only ever improve
 health — the engine *enables* Defender real-time protection, it never disables it. `-ListChecks`
 prints the live list.
+
+## Drivers, apps, memory — no extra downloads
+
+Each of these is its own script, and the console menu has a screen for every one. They use
+official sources only: Microsoft Update, `winget`, and the GPU vendor's own site.
+
+```powershell
+# Drivers: GPU status, devices with errors, updates from Microsoft Update
+.\WinSenior.Drivers.ps1
+.\WinSenior.Drivers.ps1 -Install all          # every update except the GPU driver
+.\WinSenior.Drivers.ps1 -HideGpuUpdates       # stop Windows Update replacing the vendor GPU driver
+.\WinSenior.Drivers.ps1 -Backup               # pnputil export to Documents\WinSenior\DriverBackup
+
+# Apps: inventory, silent uninstall + leftovers, winget updates / installs
+.\WinSenior.Apps.ps1 -List
+.\WinSenior.Apps.ps1 -Updates                 # or -UpdateAll
+.\WinSenior.Apps.ps1 -Uninstall 'App name' -RemoveLeftovers
+.\WinSenior.Apps.ps1 -Catalog                 # then: -Install Mozilla.Firefox,7zip.7zip
+
+# Smart memory: free RAM held by leftovers (build daemons, orphaned Java/Node, WSL)
+.\WinSenior.Memory.ps1                        # report
+.\WinSenior.Memory.ps1 -Reclaim
+.\WinSenior.Memory.ps1 -Prevent -IncludeWsl   # Gradle idle timeout + WSL autoMemoryReclaim
+.\WinSenior.Memory.ps1 -InstallAuto           # background check every 10 minutes
+
+# Insights: did the optimization help, when is the disk full, free N GB the gentle way
+.\WinSenior.Insights.ps1
+.\WinSenior.Insights.ps1 -Plan 20 -Apply
+```
+
+**Why the GPU driver is handled differently.** For gaming, the NVIDIA, AMD and Intel drivers are
+newer than the ones Windows Update ships, and they come with the game profiles. So WinSenior
+shows your GPU, how old its driver is, and the vendor's official page. Windows Update supplies
+everything else.
+
+**Why there is no "RAM booster".** Emptying working sets or the standby list makes the
+used-memory number drop, but the same pages then fault straight back in from disk. Standby
+memory is cache that Windows hands out instantly. What really keeps RAM busy is processes that
+outlive their job, and those are what the memory module finds:
+- Gradle and Kotlin daemons after a mod build.
+- MSBuild nodes.
+- `vmmem`, the WSL virtual machine.
+- A Minecraft JVM left without a window.
+
+A process is only stopped when it has been idle (it used almost no CPU over the check window),
+has no window, and has no child process still working. Graceful stop commands run first.
+
+**How the statistics work.**
+- **Boot time:** Windows records it in event 100. The boots before your last optimization are
+  compared with the boots after it, using a Mann–Whitney U test and a Hodges–Lehmann shift.
+  The first boot after the change and boots after updates are excluded. You get *Improved*,
+  *Worse*, or *no measurable effect* (inside ±5 %).
+- **Disk forecast:** a Theil–Sen trend, with cleanups split out as jumps.
+- **"Free N GB":** solves an exact 0/1 knapsack. It picks the set of cleanup tasks that reaches
+  the target with the least side effects (risk tier, plus re-download or rebuild cost).
 
 ## Batch version
 

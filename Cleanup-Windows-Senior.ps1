@@ -15,7 +15,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.3.0
+    Version : 6.5.0
     Requires: PowerShell 5.1+ (Windows). Administrator rights for most tasks.
 
 .EXAMPLE
@@ -585,6 +585,177 @@ function Remove-ProtectedFolder {
         return [pscustomobject]@{ Files = 0; Bytes = $size; Errors = 0 }
     }
     $null
+}
+
+# =====================================================================
+# DISK-SPACE HELPERS (CompactOS / Installer orphans / VHDX)
+# =====================================================================
+# WofIsExternalFile (wofapi.h): a CompactOS system has its System32 binaries backed
+# by the WOF file provider (2).
+function Test-CompactOsActive {
+    if (-not ('WinSenior.Wof' -as [type])) {
+        Add-Type -Namespace WinSenior -Name Wof -MemberDefinition @'
+[DllImport("wofutil.dll", CharSet = CharSet.Unicode)]
+public static extern int WofIsExternalFile(string path, out int isExternal, out int provider, IntPtr info, ref int len);
+'@ -ErrorAction SilentlyContinue
+    }
+    if (-not ('WinSenior.Wof' -as [type])) { return $false }
+    $hits = 0
+    foreach ($f in 'shell32.dll', 'mshtml.dll', 'Windows.UI.Xaml.dll') {
+        $p = Join-Path "$env:WINDIR\System32" $f
+        if (-not (Test-Path -LiteralPath $p)) { continue }
+        $ext = 0; $prov = 0; $len = 0
+        $hr = [WinSenior.Wof]::WofIsExternalFile($p, [ref]$ext, [ref]$prov, [IntPtr]::Zero, [ref]$len)
+        if ($hr -ge 0 -and $ext -eq 1 -and $prov -eq 2) { $hits++ }
+    }
+    $hits -ge 2
+}
+
+# Every LocalPackage path the Windows Installer still references (all users, all
+# contexts). Returns $null - never an empty set - when enumeration fails, so the
+# caller can refuse to treat "everything" as orphaned.
+function Get-InstallerReferencedPackage {
+    $set = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    try { $msi = New-Object -ComObject WindowsInstaller.Installer }
+    catch { Write-CleanupLog "  Windows Installer COM unavailable: $($_.Exception.Message)" 'Warning'; return $null }
+    # 's-1-1-0' (everyone) sees per-user installs of OTHER users too but needs admin;
+    # '' = machine context + the current user. Either must succeed for products.
+    $productsOk = $false
+    foreach ($sid in 's-1-1-0', '') {
+        if ($productsOk) { break }
+        # The '' fallback cannot see other users' per-user installs, whose packages
+        # would then look orphaned - only trust it on a single-profile machine.
+        if ($sid -eq '' -and @(Get-UserProfiles).Count -gt 1) { Write-Verbose 'MSI: all-users enumeration failed on a multi-user PC'; break }
+        try {
+            foreach ($p in $msi.ProductsEx('', $sid, 7)) {
+                try { $lp = $p.InstallProperty('LocalPackage'); if ($lp) { [void]$set.Add($lp) } } catch { Write-Verbose $_ }
+            }
+            $productsOk = $true
+            foreach ($x in $msi.PatchesEx('', $sid, 7, 15)) {
+                try { $lp = $x.PatchProperty('LocalPackage'); if ($lp) { [void]$set.Add($lp) } } catch { Write-Verbose $_ }
+            }
+        } catch { Write-Verbose "MSI enumeration ($sid): $($_.Exception.Message)" }
+    }
+    if (-not $productsOk -or $set.Count -eq 0) { Write-CleanupLog '  Windows Installer enumeration failed - nothing is treated as orphaned' 'Warning'; return $null }
+    , $set
+}
+
+# Pure: which root-level .msi/.msp files are orphans. Adobe/Acrobat patches are kept
+# (PatchCleaner's default exclusion - Acrobat updaters re-read their cached .msp).
+function Select-InstallerOrphan {
+    param([object[]]$Files, $Referenced)
+    if ($null -eq $Referenced -or $Referenced.Count -eq 0) { return @() }   # refuse: enumeration looks broken
+    foreach ($f in $Files) {
+        if ($f.Extension -notmatch '^\.ms[ip]$') { continue }
+        if ($Referenced.Contains($f.FullName)) { continue }
+        if ($f.Name -match '(?i)acro|adobe') { continue }
+        $f
+    }
+}
+
+function Get-InstallerQuarantineRoot { Join-Path $env:ProgramData 'WinSenior\InstallerQuarantine' }
+
+function Invoke-InstallerOrphanCleanup {
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+    $root = Get-InstallerQuarantineRoot
+    [int64]$purged = 0; $files = 0; $errors = 0
+    # 1) purge quarantine batches older than 30 days (these bytes are really freed)
+    foreach ($b in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | Where-Object { $_.CreationTime -lt (Get-Date).AddDays(-30) })) {
+        $m = Measure-FsItem $b
+        if ($PSCmdlet.ShouldProcess($b.FullName, 'Delete quarantined installer batch (> 30 days)')) {
+            Remove-Item -LiteralPath $b.FullName -Recurse -Force -ErrorAction SilentlyContinue
+            if (-not (Test-Path -LiteralPath $b.FullName)) { $purged += $m.Bytes; $files += $m.Files } else { $errors++ }
+        }
+        elseif (Test-WhatIfMode) { $purged += $m.Bytes; $files += $m.Files }
+    }
+    # 2) quarantine new orphans
+    $ref = Get-InstallerReferencedPackage
+    if ($null -eq $ref) { return [pscustomobject]@{ Files = $files; Bytes = $purged; Errors = $errors + 1 } }
+    $cands = @(Get-ChildItem -LiteralPath "$env:WINDIR\Installer" -File -Force -ErrorAction SilentlyContinue)
+    $orphans = @(Select-InstallerOrphan -Files $cands -Referenced $ref)
+    if (-not $orphans) { return [pscustomobject]@{ Files = $files; Bytes = $purged; Errors = $errors } }
+    [int64]$oBytes = 0; foreach ($o in $orphans) { $oBytes += $o.Length }
+    Write-CleanupLog ("  {0} orphaned package(s), {1} (referenced: {2})" -f $orphans.Count, (Format-FileSize $oBytes), $ref.Count) 'Info'
+    if (Test-WhatIfMode) {
+        # Reported as the eventual gain: these bytes leave the disk once the batch ages out.
+        Write-CleanupLog "[WhatIf] would move them to $root (deleted after 30 days)" 'WhatIf'
+        return [pscustomobject]@{ Files = $files + $orphans.Count; Bytes = $purged + $oBytes; Errors = $errors }
+    }
+    $batch = Join-Path $root (Get-Date -Format 'yyyyMMdd-HHmmss')
+    New-Item -ItemType Directory -Path $batch -Force | Out-Null
+    $manifest = New-Object System.Collections.Generic.List[object]
+    foreach ($o in $orphans) {
+        try { Move-Item -LiteralPath $o.FullName -Destination (Join-Path $batch $o.Name) -Force -ErrorAction Stop; $manifest.Add(@{ Name = $o.Name; From = $o.FullName; Bytes = $o.Length }) }
+        catch { $errors++; Write-CleanupLog "  $($o.Name): $($_.Exception.Message)" 'Debug' }
+    }
+    ($manifest | ConvertTo-Json -Depth 3) | Set-Content -LiteralPath (Join-Path $batch 'manifest.json') -Encoding UTF8
+    # NTFS-compress the batch: same volume, so this is what actually frees space now.
+    & compact.exe /c /s:"$batch" /i /q *>$null
+    # Honest accounting: only what compression saves now + what the purge removed;
+    # the rest is freed when this batch ages out.
+    $now = Get-CompressedBytes $batch
+    [int64]$moved = 0; foreach ($m in $manifest) { $moved += [int64]$m.Bytes }
+    Write-CleanupLog "  quarantined in $batch (restore: copy the files back to $env:WINDIR\Installer); the rest is freed after 30 days" 'Info'
+    [pscustomobject]@{ Files = $files + $manifest.Count; Bytes = $purged + [Math]::Max([int64]0, $moved - $now); Errors = $errors }
+}
+
+# On-disk (allocated) bytes of the files under a folder - NTFS compression aware.
+function Get-CompressedBytes {
+    param([string]$Root)
+    if (-not ('WinSenior.FsSize' -as [type])) {
+        Add-Type -Namespace WinSenior -Name FsSize -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+public static extern uint GetCompressedFileSizeW(string name, out uint high);
+'@ -ErrorAction SilentlyContinue
+    }
+    [int64]$sum = 0
+    foreach ($f in (Get-ChildItem -LiteralPath $Root -Recurse -File -Force -ErrorAction SilentlyContinue)) {
+        $hi = [uint32]0
+        $lo = [WinSenior.FsSize]::GetCompressedFileSizeW($f.FullName, [ref]$hi)
+        if ($lo -eq [uint32]::MaxValue -and [Runtime.InteropServices.Marshal]::GetLastWin32Error() -ne 0) { $sum += $f.Length }
+        else { $sum += ([int64]$hi -shl 32) + [int64]$lo }
+    }
+    $sum
+}
+
+# WSL distros (HKCU Lxss BasePath) + Docker Desktop's data disk.
+function Get-WslVirtualDisk {
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($k in (Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss' -ErrorAction SilentlyContinue)) {
+        $bp = (Get-ItemProperty -LiteralPath $k.PSPath -Name BasePath -ErrorAction SilentlyContinue).BasePath
+        if ($bp) { $bp = $bp -replace '^\\\\\?\\', ''; $v = Join-Path $bp 'ext4.vhdx'; if (Test-Path -LiteralPath $v) { $out.Add($v) } }
+    }
+    foreach ($v in @("$env:LOCALAPPDATA\Docker\wsl\disk\docker_data.vhdx", "$env:LOCALAPPDATA\Docker\wsl\data\ext4.vhdx")) {
+        if ((Test-Path -LiteralPath $v) -and -not $out.Contains($v)) { $out.Add($v) }
+    }
+    $out
+}
+
+function Invoke-VhdxCompact {
+    $disks = @(Get-WslVirtualDisk)
+    if (-not $disks) { Write-CleanupLog '  no WSL / Docker virtual disks found' 'Debug'; return $null }
+    if (Test-WhatIfMode) {
+        foreach ($d in $disks) { Write-CleanupLog "[WhatIf] would compact $d ($(Format-FileSize (Get-Item -LiteralPath $d -Force).Length))" 'WhatIf' }
+        return [pscustomobject]@{ Files = $disks.Count; Bytes = 0; Errors = 0 }
+    }
+    & wsl.exe --shutdown *>$null
+    Start-Sleep -Seconds 8
+    [int64]$gain = 0; $errors = 0
+    foreach ($d in $disks) {
+        $before = (Get-Item -LiteralPath $d -Force).Length
+        $script = Join-Path $env:TEMP ("ws-compact-{0}.txt" -f [guid]::NewGuid().ToString('N'))
+        Set-Content -LiteralPath $script -Encoding ASCII -Value @(
+            "select vdisk file=`"$d`"", 'attach vdisk readonly', 'compact vdisk', 'detach vdisk')
+        & diskpart.exe /s $script *>$null
+        $code = $LASTEXITCODE
+        Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue
+        $after = (Get-Item -LiteralPath $d -Force).Length
+        if ($code -ne 0) { $errors++; Write-CleanupLog "  diskpart failed on $d (exit $code) - is Docker Desktop still running?" 'Warning' }
+        $gain += [Math]::Max(0, $before - $after)
+        Write-CleanupLog ("  {0}: {1} -> {2}" -f (Split-Path $d -Leaf), (Format-FileSize $before), (Format-FileSize $after)) 'Debug'
+    }
+    [pscustomobject]@{ Files = $disks.Count; Bytes = $gain; Errors = $errors }
 }
 
 # =====================================================================
@@ -1361,6 +1532,43 @@ public static bool Enable(string name) {
             $ok = Invoke-NativeStep 'powercfg /hibernate off' { & powercfg.exe /hibernate off *>$null }
             [pscustomobject]@{ Files = 1; Bytes = $(if ($ok) { $size } else { 0 }); Errors = $(if ($ok) { 0 } else { 1 }) }
         }
+        # Reduced hiberfile = 20 % of RAM instead of 40 % and still powers Fast Startup;
+        # only hibernate (S4) itself goes away (MS Learn: system-power-states). Laptops
+        # keep full hibernate unless the task is asked for explicitly.
+        New-CleanupTask hiber-reduced 'Shrink hiberfil.sys to the reduced size (keeps Fast Startup)' Updates Moderate -Action {
+            $f = "$env:SystemDrive\hiberfil.sys"
+            if (-not (Test-Path -LiteralPath $f)) { Write-CleanupLog '  hibernation is off - nothing to shrink' 'Debug'; return $null }
+            if ([int](Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' -Name HiberFileType -ErrorAction SilentlyContinue).HiberFileType -eq 1) {
+                Write-CleanupLog '  already reduced' 'Debug'; return $null
+            }
+            if ((Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue) -and ($Include -notcontains 'hiber-reduced')) {
+                Write-CleanupLog '  laptop: hibernate kept (use -Include hiber-reduced to shrink anyway)' 'Debug'; return $null
+            }
+            $size = (Get-Item -LiteralPath $f -Force).Length
+            $ram  = [int64](Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).TotalPhysicalMemory
+            $est  = [int64][Math]::Max(0, $size - 0.2 * $ram)
+            if (Test-WhatIfMode) {
+                Write-CleanupLog "[WhatIf] would run powercfg /h /type reduced (~$(Format-FileSize $est))" 'WhatIf'
+                return [pscustomobject]@{ Files = 1; Bytes = $est; Errors = 0 }
+            }
+            # A custom size >= 40 % pins the type to full, so reset it first.
+            $ok = (Invoke-NativeStep 'powercfg /h /size 0' { & powercfg.exe /h /size 0 *>$null }) -and
+                  (Invoke-NativeStep 'powercfg /h /type reduced' { & powercfg.exe /h /type reduced *>$null })
+            $now = (Get-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue).Length
+            [pscustomobject]@{ Files = 1; Bytes = [int64][Math]::Max(0, $size - $now); Errors = $(if ($ok) { 0 } else { 1 }) }
+        }
+        # Orphaned Windows Installer packages (PatchCleaner method): every .msi/.msp in the
+        # root of %WINDIR%\Installer that no registered product or patch references. They are
+        # MOVED to a quarantine folder (Microsoft: a missing cached package breaks repair /
+        # uninstall and cannot be recreated), and only purged after 30 days.
+        New-CleanupTask msi-orphans 'Orphaned Windows Installer packages (quarantined 30 days, then deleted)' Updates Aggressive -DefaultOn $false -Action {
+            Invoke-InstallerOrphanCleanup
+        }
+        # WSL2 / Docker virtual disks only grow; diskpart "compact vdisk" returns the
+        # space the Linux side already freed. Needs every distro stopped.
+        New-CleanupTask vhdx-compact 'Compact WSL2 / Docker virtual disks (stops running distros)' Disks Aggressive -DefaultOn $false -Action {
+            Invoke-VhdxCompact
+        }
         New-CleanupTask shadow-old 'Delete all but the newest restore point / shadow copy (vssadmin)' Updates Dangerous -DefaultOn $false -Action {
             # System-drive restore-point shadows only: other volumes' shadows and the
             # non-client-accessible ones made by backup software are left alone.
@@ -1424,6 +1632,21 @@ public static bool Enable(string name) {
             [pscustomobject]@{ Files = 0; Bytes = [int64][Math]::Max(0, $gain); Errors = 0 }
         }
         New-CleanupTask dism-logs 'DISM logs (>7 days)' Optimization Safe -AgeDays 7 -Paths @('%WINDIR%\Logs\DISM\*')
+        # CompactOS: Windows binaries stored WOF-compressed, 2.6-4.7 GB back (MS Learn
+        # compact-os); reversible with compact /CompactOS:never. Slow (10-20 min).
+        New-CleanupTask compactos 'Compress Windows system files (CompactOS, undo: compact /CompactOS:never)' Optimization Moderate -DefaultOn $false -Action {
+            # compact's own query text is localized and its exit code undocumented - ask WOF.
+            if (Test-CompactOsActive) { Write-CleanupLog '  already compressed' 'Debug'; return $null }
+            if (Test-WhatIfMode) {
+                $est = if ([Environment]::Is64BitOperatingSystem) { [int64]2.6GB } else { [int64]1.5GB }
+                Write-CleanupLog "[WhatIf] would run compact /CompactOS:always (Microsoft's typical gain ~$(Format-FileSize $est))" 'WhatIf'
+                return [pscustomobject]@{ Files = 0; Bytes = $est; Errors = 0 }
+            }
+            $free0 =(New-Object System.IO.DriveInfo($env:SystemDrive)).AvailableFreeSpace
+            $ok = Invoke-NativeStep 'compact /CompactOS:always' { & compact.exe /CompactOS:always *>$null }
+            $gain = (New-Object System.IO.DriveInfo($env:SystemDrive)).AvailableFreeSpace - $free0
+            [pscustomobject]@{ Files = 0; Bytes = [int64][Math]::Max(0, $gain); Errors = $(if ($ok) { 0 } else { 1 }) }
+        }
         New-CleanupTask sfc 'System File Checker (sfc /scannow)' Optimization Moderate -DefaultOn $true -Action {
             Invoke-NativeStep 'sfc /scannow' { & sfc.exe /scannow | Out-Null } | Out-Null
             $null

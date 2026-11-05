@@ -11,7 +11,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.3.0
+    Version : 6.5.0
     Requires: PowerShell 5.1+ (Windows). Administrator rights (auto-elevates).
 
 .EXAMPLE
@@ -51,6 +51,10 @@ $script:OptimizeScript = Join-Path $script:Root 'Optimize-Windows-Senior.ps1'
 $script:RepairScript   = Join-Path $script:Root 'Repair-Windows-Senior.ps1'
 $script:UiScript       = Join-Path $script:Root 'WinSenior.UI.ps1'
 $script:ScheduleScript = Join-Path $script:Root 'WinSenior.Schedule.ps1'
+$script:DriversScript  = Join-Path $script:Root 'WinSenior.Drivers.ps1'
+$script:AppsScript     = Join-Path $script:Root 'WinSenior.Apps.ps1'
+$script:MemoryScript   = Join-Path $script:Root 'WinSenior.Memory.ps1'
+$script:InsightsScript = Join-Path $script:Root 'WinSenior.Insights.ps1'
 
 $script:GuiScript      = Join-Path $script:Root 'WinSenior.Gui.ps1'
 
@@ -319,6 +323,110 @@ function Show-TroubleshootScreen {
 }
 
 # =====================================================================
+# DRIVERS / APPS / MEMORY / INSIGHTS SCREENS  (each runs its own script)
+# =====================================================================
+function Show-DriversScreen {
+    $items = @(
+        [pscustomobject]@{ Label = 'Check drivers       (GPU, problem devices, Microsoft Update)' }
+        [pscustomobject]@{ Label = 'Install updates     (everything except the GPU driver)' }
+        [pscustomobject]@{ Label = 'Hide GPU updates    (keep the vendor GPU driver)' }
+        [pscustomobject]@{ Label = 'Back up drivers     (pnputil export to Documents)' }
+        [pscustomobject]@{ Label = 'Restore drivers     (from a backup folder)' }
+    )
+    $status = @('Official sources only: Microsoft Update + the GPU vendor (NVIDIA / AMD / Intel).')
+    while ($true) {
+        switch (Show-Menu -Title 'Drivers' -Items $items -StatusLines $status) {
+            0 { Write-Host ''; & $script:DriversScript;                  Wait-Enter }
+            1 { Write-Host ''; & $script:DriversScript -Install all;     Wait-Enter }
+            2 { Write-Host ''; & $script:DriversScript -HideGpuUpdates;  Wait-Enter }
+            3 { Write-Host ''; & $script:DriversScript -Backup;          Wait-Enter }
+            4 {
+                $p = (Read-Key '  Backup folder: ').Trim().Trim('"')
+                if ($p) { & $script:DriversScript -Restore $p }
+                Wait-Enter
+            }
+            $null { return }
+        }
+    }
+}
+
+function Show-AppsScreen {
+    $items = @(
+        [pscustomobject]@{ Label = 'Installed apps      (largest first)' }
+        [pscustomobject]@{ Label = 'Check for updates   (winget)' }
+        [pscustomobject]@{ Label = 'Update everything   (winget, silent)' }
+        [pscustomobject]@{ Label = 'Uninstall an app    (+ remove leftovers)' }
+        [pscustomobject]@{ Label = 'Install apps        (curated catalog, winget)' }
+    )
+    $status = @('winget installs from the vendors'' own URLs, hash-checked by Microsoft''s manifest.')
+    while ($true) {
+        switch (Show-Menu -Title 'Apps' -Items $items -StatusLines $status) {
+            0 { Write-Host ''; & $script:AppsScript -List;      Wait-Enter }
+            1 { Write-Host ''; & $script:AppsScript -Updates;   Wait-Enter }
+            2 { Write-Host ''; & $script:AppsScript -UpdateAll; Wait-Enter }
+            3 {
+                $n = (Read-Key '  App name (as shown in the list): ').Trim()
+                if ($n) { & $script:AppsScript -Uninstall $n -RemoveLeftovers }
+                Wait-Enter
+            }
+            4 {
+                & $script:AppsScript -Catalog
+                $ids = (Read-Key '  Ids to install (comma-separated): ').Trim()
+                if ($ids) { & $script:AppsScript -Install ($ids -split '\s*,\s*' | Where-Object { $_ }) }
+                Wait-Enter
+            }
+            $null { return }
+        }
+    }
+}
+
+function Show-MemoryScreen {
+    $items = @(
+        [pscustomobject]@{ Label = 'Check memory        (pressure, biggest consumers, leftovers)' }
+        [pscustomobject]@{ Label = 'Free leftover RAM   (build daemons, orphaned Java / Node)' }
+        [pscustomobject]@{ Label = 'Fix the cause       (Gradle idle timeout, WSL memory reclaim)' }
+        [pscustomobject]@{ Label = 'Automatic mode ON   (check every 10 minutes)' }
+        [pscustomobject]@{ Label = 'Automatic mode OFF' }
+        [pscustomobject]@{ Label = 'Purge standby list  (manual; only for game stutter)' }
+    )
+    $status = @('Stops processes that hold RAM after their job is done - never a placebo "RAM booster".')
+    while ($true) {
+        switch (Show-Menu -Title 'Smart memory' -Items $items -StatusLines $status) {
+            0 { Write-Host ''; & $script:MemoryScript -IncludeWsl;          Wait-Enter }
+            1 { Write-Host ''; & $script:MemoryScript -Reclaim;             Wait-Enter }
+            2 { Write-Host ''; & $script:MemoryScript -Prevent -IncludeWsl; Wait-Enter }
+            3 { Write-Host ''; & $script:MemoryScript -InstallAuto;         Wait-Enter }
+            4 { Write-Host ''; & $script:MemoryScript -RemoveAuto;          Wait-Enter }
+            5 { Write-Host ''; & $script:MemoryScript -PurgeStandby;        Wait-Enter }
+            $null { return }
+        }
+    }
+}
+
+function Show-InsightsScreen {
+    $items = @(
+        [pscustomobject]@{ Label = 'Boot time & disk forecast   (did optimizing help? when is the disk full?)' }
+        [pscustomobject]@{ Label = 'Free N GB, least side effects  (plan from the last scan)' }
+    )
+    $status = @('Measured, not guessed: boot events + statistics, disk history + robust trend.')
+    while ($true) {
+        switch (Show-Menu -Title 'Insights' -Items $items -StatusLines $status) {
+            0 { Write-Host ''; & $script:InsightsScript; Wait-Enter }
+            1 {
+                $gb = (Read-Key '  How many GB to free: ').Trim() -replace ',', '.'
+                $v = 0.0
+                if ([double]::TryParse($gb, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$v) -and $v -gt 0) {
+                    & $script:InsightsScript -Plan $v
+                    if ((Read-Key '  Run exactly these tasks now? (y/N) ').Trim() -match '^(y|yes)$') { & $script:InsightsScript -Plan $v -Apply }
+                }
+                Wait-Enter
+            }
+            $null { return }
+        }
+    }
+}
+
+# =====================================================================
 # MAIN MENU
 # =====================================================================
 function Show-MainMenu {
@@ -326,6 +434,10 @@ function Show-MainMenu {
         [pscustomobject]@{ Label = 'Disk cleanup        (categories, preview, run)' }
         [pscustomobject]@{ Label = 'Optimize Windows    (performance / privacy / debloat / network)' }
         [pscustomobject]@{ Label = 'Troubleshoot        (scan for problems, then repair)' }
+        [pscustomobject]@{ Label = 'Drivers             (official updates, GPU, backup)' }
+        [pscustomobject]@{ Label = 'Apps                (uninstall, update, install)' }
+        [pscustomobject]@{ Label = 'Smart memory        (free RAM held by leftovers)' }
+        [pscustomobject]@{ Label = 'Insights            (boot time, disk forecast, free N GB)' }
         [pscustomobject]@{ Label = 'Full run            (cleanup + optimization)' }
         [pscustomobject]@{ Label = 'Undo optimizations  (revert last run from backup)' }
         [pscustomobject]@{ Label = 'Create restore point' }
@@ -337,9 +449,13 @@ function Show-MainMenu {
             0 { Show-CleanupScreen }
             1 { Show-OptimizeScreen }
             2 { Show-TroubleshootScreen }
-            3 { Invoke-FullRun }
-            4 { Write-Banner 'Undo optimizations'; & $script:OptimizeScript -Undo; Wait-Enter }
-            5 {
+            3 { Show-DriversScreen }
+            4 { Show-AppsScreen }
+            5 { Show-MemoryScreen }
+            6 { Show-InsightsScreen }
+            7 { Invoke-FullRun }
+            8 { Write-Banner 'Undo optimizations'; & $script:OptimizeScript -Undo; Wait-Enter }
+            9 {
                 # All three engines are dot-sourced here, so their shared $LogPath default ends up as
                 # the LAST engine's log - name the cleanup log explicitly.
                 Write-Banner 'Create restore point'
@@ -347,7 +463,7 @@ function Show-MainMenu {
                     -LogAction { param($m, $l) Write-WsLog -Message $m -Level $l -LogPath (Join-Path $env:TEMP 'WindowsCleanup.log') })
                 Wait-Enter
             }
-            6 { Write-Banner 'Tasks, tweaks & checks'; Show-TaskList; Show-TweakList; Show-CheckList; Wait-Enter }
+            10 { Write-Banner 'Tasks, tweaks & checks'; Show-TaskList; Show-TweakList; Show-CheckList; Wait-Enter }
             $null { Write-Host ''; Write-Host '  Bye.' -ForegroundColor Cyan; return }
         }
     }
