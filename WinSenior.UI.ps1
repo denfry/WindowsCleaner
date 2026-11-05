@@ -39,6 +39,7 @@ function Initialize-UiTheme {
         HighlightBg = 'Cyan'
     }
     $script:UiLastHeight = 0
+    $script:UiHomeRow = 0
 }
 
 function Resolve-MenuAction {
@@ -118,6 +119,7 @@ function Show-Menu {
     }
     $cursor = 0
     $w = Get-FrameWidth
+    Reset-UiScreen
     while ($true) {
         $frame = Get-MenuFrame -Title $Title -Items $Items -Cursor $cursor -StatusLines $StatusLines -Footer $Footer -Width $w -Glyph $script:UiGlyph
         Write-Frame -Lines $frame
@@ -141,8 +143,12 @@ function Show-Checklist {
     if ([Console]::IsInputRedirected) { return }
     $cursor = 0
     $w = Get-FrameWidth
+    Reset-UiScreen
+    # Frame chrome: 2 rules + title + status lines + 2 blank rows + footer + 1 spare.
+    $h = try { [Console]::WindowHeight } catch { 40 }
+    $maxBody = [Math]::Max(5, $h - (7 + @($StatusLines).Count))
     while ($true) {
-        $frame = Get-ChecklistFrame -Title $Title -Items $Items -Cursor $cursor -OnSet $OnSet -StatusLines $StatusLines -Footer $Footer -Width $w -Glyph $script:UiGlyph
+        $frame = Get-ChecklistFrame -Title $Title -Items $Items -Cursor $cursor -OnSet $OnSet -StatusLines $StatusLines -Footer $Footer -Width $w -Glyph $script:UiGlyph -MaxBody $maxBody
         Write-Frame -Lines $frame
         $act = Resolve-ChecklistAction -Token (Read-MenuKey) -Cursor $cursor -Count $Items.Count
         $cursor = $act.Cursor
@@ -200,6 +206,14 @@ function Write-FrameLine {
     Write-Host ''
 }
 
+# Clear the console once and remember where the frame starts. Painting from buffer
+# row 0 drew the menu into the scrollback (off-screen) after long engine output.
+function Reset-UiScreen {
+    try { Clear-Host } catch { Write-Verbose 'no console to clear' }
+    $script:UiHomeRow = try { [Console]::CursorTop } catch { 0 }
+    $script:UiLastHeight = 0
+}
+
 function Write-Frame {
     param([object[]]$Lines)
     $w = try { [Console]::WindowWidth } catch { 80 }
@@ -207,12 +221,13 @@ function Write-Frame {
     # unavailable (no real handle / redirected), fall back to Clear-Host, and
     # if even that fails just stream the lines. The painter must never throw.
     $placedHome = $false
-    try { [Console]::SetCursorPosition(0, 0); $placedHome = $true } catch { try { Clear-Host } catch { } }
+    $top = [int]$script:UiHomeRow
+    try { [Console]::SetCursorPosition(0, $top); $placedHome = $true } catch { try { Clear-Host } catch { } }
     foreach ($ln in $Lines) { Write-FrameLine -Line $ln -Width ($w - 1) }
     if ($placedHome) {
         $extra = $script:UiLastHeight - $Lines.Count
         for ($j = 0; $j -lt $extra; $j++) { Write-Host (' ' * ($w - 1)) }
-        try { [Console]::SetCursorPosition(0, $Lines.Count) } catch { }
+        try { [Console]::SetCursorPosition(0, $top + $Lines.Count) } catch { }
     }
     $script:UiLastHeight = $Lines.Count
 }
@@ -250,7 +265,10 @@ function Get-ChecklistFrame {
         [string[]]$StatusLines = @(),
         [string]$Footer = '',
         [int]$Width = 70,
-        [hashtable]$Glyph
+        [hashtable]$Glyph,
+        # Rows available for the list (0 = no limit). A long list (100+ cleanup tasks)
+        # scrolls around the cursor instead of running off the console window.
+        [int]$MaxBody = 0
     )
     if ($Glyph) { $script:UiGlyph = $Glyph }
     $g = $script:UiGlyph
@@ -261,11 +279,13 @@ function Get-ChecklistFrame {
     $out.Add((New-UiRow -Text $Title -Fg $script:UiColor.Title -Highlight $false -Inner $inner))
     foreach ($s in $StatusLines) { $out.Add((New-UiRow -Text $s -Fg $script:UiColor.Dim -Highlight $false -Inner $inner)) }
     $out.Add((New-UiRow -Text '' -Fg $script:UiColor.Dim -Highlight $false -Inner $inner))
+    $body = New-Object 'System.Collections.Generic.List[object]'
+    $cursorLine = 0
     $lastGroup = [object]$null
     for ($i = 0; $i -lt $Items.Count; $i++) {
         $it = $Items[$i]
         if ($it.Group -ne $lastGroup) {
-            $out.Add((New-UiRow -Text $it.Group -Fg $script:UiColor.Accent -Highlight $false -Inner $inner))
+            $body.Add((New-UiRow -Text $it.Group -Fg $script:UiColor.Accent -Highlight $false -Inner $inner))
             $lastGroup = $it.Group
         }
         $box = if ($OnSet.Contains($it.Id)) { '[x]' } else { '[ ]' }
@@ -275,8 +295,21 @@ function Get-ChecklistFrame {
         if ($null -ne $it.Applied) { $suffix = if ($it.Applied) { '  (applied)' } else { '  (not set)' } }
         $txt = '{0} {1} {2,-11}{3}{4}' -f $cur, $box, $risk, $it.Name, $suffix
         $fg = if ($risk -eq 'Dangerous') { $script:UiColor.Danger } else { $script:UiColor.Normal }
-        $out.Add((New-UiRow -Text $txt -Fg $fg -Highlight ($i -eq $Cursor) -Inner $inner))
+        if ($i -eq $Cursor) { $cursorLine = $body.Count }
+        $body.Add((New-UiRow -Text $txt -Fg $fg -Highlight ($i -eq $Cursor) -Inner $inner))
     }
+    if ($MaxBody -gt 2 -and $body.Count -gt $MaxBody) {
+        # Constant height: one line above and one below always hold the "more" markers.
+        $slots = $MaxBody - 2
+        $start = [Math]::Max(0, [Math]::Min($cursorLine - [int][Math]::Floor($slots / 2), $body.Count - $slots))
+        $end = $start + $slots
+        $above = if ($start -gt 0) { "   ... $start more above" } else { '' }
+        $below = if ($end -lt $body.Count) { "   ... $($body.Count - $end) more below" } else { '' }
+        $out.Add((New-UiRow -Text $above -Fg $script:UiColor.Dim -Highlight $false -Inner $inner))
+        for ($k = $start; $k -lt $end; $k++) { $out.Add($body[$k]) }
+        $out.Add((New-UiRow -Text $below -Fg $script:UiColor.Dim -Highlight $false -Inner $inner))
+    }
+    else { foreach ($b in $body) { $out.Add($b) } }
     $out.Add((New-UiRow -Text '' -Fg $script:UiColor.Dim -Highlight $false -Inner $inner))
     $out.Add((& $rule $g.BL $g.BR))
     if ($Footer) { $out.Add([pscustomobject]@{ Left = ''; Text = " $Footer"; Right = ''; Fg = $script:UiColor.Dim; Highlight = $false }) }

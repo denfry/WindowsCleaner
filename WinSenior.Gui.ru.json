@@ -1,0 +1,1327 @@
+{
+  "_comment": "Russian UI for WinSenior.Gui.ps1. Keys are the English source texts; tasks/tweaks/checks are keyed by registry Id.",
+  "ui": {
+    "   (off by default)": "   (по умолчанию выключено)",
+    "   (on by default)": "   (по умолчанию включено)",
+    " ({0} items)": " (объектов: {0})",
+    " (reboot needed)": " (нужна перезагрузка)",
+    "(OK)": "(успешно)",
+    ", fixed {0}": ", исправлено: {0}",
+    "... and {0} more": "... и ещё {0}",
+    "{0}   {1} free of {2}": "{0}   свободно {1} из {2}",
+    "{0} aggressive": "агрессивных: {0}",
+    "{0} checks passed.": "Проверок пройдено: {0}.",
+    "{0} cleanup tasks, {1} optimization tweaks, {2} diagnostic checks.": "Задач очистки: {0}, твиков оптимизации: {1}, диагностических проверок: {2}.",
+    "{0} DANGEROUS": "ОПАСНЫХ: {0}",
+    "{0} days ago": "{0} дн. назад",
+    "{0} enabled, {1} disabled": "включено: {0}, выключено: {1}",
+    "{0} entries": "записей: {0}",
+    "{0} failing, {1} warning": "проблем: {0}, предупреждений: {1}",
+    "{0} free": "свободно {0}",
+    "{0} held back by the options": "не запустятся из-за параметров: {0}",
+    "{0} installed": "установлено: {0}",
+    "{0} items": "объектов: {0}",
+    "{0} items, {1} errors, {2} s": "объектов: {0}, ошибок: {1}, {2} с",
+    "{0} locked file(s) will be removed at the next restart": "занятых файлов будет удалено при перезагрузке: {0}",
+    "{0} of them are already applied and will be skipped.": "Из них уже применено и будет пропущено: {0}.",
+    "{0} point to a missing file": "указывают на отсутствующий файл: {0}",
+    "{0} tasks scanned - nothing deleted yet.": "Проверено задач: {0}. Пока ничего не удалено.",
+    "{0} unreadable file(s) skipped": "пропущено нечитаемых файлов: {0}",
+    "{0} used of {1}": "занято {0} из {1}",
+    "{0} will no longer start with Windows.": "{0} больше не будет запускаться вместе с Windows.",
+    "{0} will start with Windows again.": "{0} снова будет запускаться вместе с Windows.",
+    "0 = no age filter. Whole days, 0 to 3650.": "0 = без фильтра по возрасту. Целое число дней от 0 до 3650.",
+    "1st of every month 03:30 - read-only health scan": "1-го числа каждого месяца в 03:30 - проверка состояния (только чтение)",
+    "Still open: {0} problem(s), {1} warning(s).": "Осталось: проблем - {0}, предупреждений - {1}.",
+    "The re-scan found no problems.": "Повторная проверка проблем не нашла.",
+    "Checked again to confirm.": "Выполняется повторная проверка для подтверждения.",
+    "The language could not be saved.": "Не удалось сохранить язык.",
+    "No write access to {0}.": "Нет прав на запись в {0}.",
+    "A reboot is required to finish the repair. Save your work and restart Windows when convenient.": "Чтобы завершить исправление, нужна перезагрузка. Сохраните работу и перезапустите Windows, когда будет удобно.",
+    "A restore point is created first.": "Сначала будет создана точка восстановления.",
+    "A restore point lets Windows roll back system files, drivers and the registry to this moment.": "Точка восстановления позволяет откатить системные файлы, драйверы и реестр Windows к текущему моменту.",
+    "A System Restore snapshot before anything is deleted.": "Снимок восстановления системы перед любым удалением.",
+    "About {0} will be freed (the last scan covered {1} of these {2} tasks).": "Будет освобождено около {0} (последняя проверка охватила {1} из {2} задач).",
+    "Active": "Активна",
+    "Administrator": "Администратор",
+    "Administrator rights are required for this.": "Для этого нужны права администратора.",
+    "Aggressive": "Агрессивная",
+    "Aggressive ({0}):": "Агрессивные ({0}):",
+    "select all": "выбрать все",
+    "All": "Все",
+    "All files": "Все файлы",
+    "All good": "Всё в порядке",
+    "All history": "Вся история",
+    "All users": "Все пользователи",
+    "Already reverted": "Уже отменено",
+    "An operation is still running. Cancel it and quit?": "Операция ещё выполняется. Прервать её и выйти?",
+    "An unexpected error occurred - see the log.": "Произошла непредвиденная ошибка - смотрите журнал.",
+    "Another operation is still running.": "Другая операция ещё выполняется.",
+    "APPLICATION": "ПРИЛОЖЕНИЕ",
+    "App": "Приложение",
+    "App log folder": "Папка журналов",
+    "Applied": "Применён",
+    "Applied {0} tweak(s).": "Применено твиков: {0}.",
+    "Applied {0}, skipped {1}": "Применено: {0}, пропущено: {1}",
+    "applied right now: {0}": "сейчас применено: {0}",
+    "Apply": "Применить",
+    "Apply {0} tweak(s) now?": "Применить твики ({0})?",
+    "Apply every available fix, including heavy ones (SFC, DISM, Windows Update reset, network stack). A restore point is created first. This can take a long time and may need a reboot.": "Применить все доступные исправления, включая тяжёлые (SFC, DISM, сброс Центра обновления Windows, сетевого стека). Сначала будет создана точка восстановления. Это может занять много времени и потребовать перезагрузки.",
+    "Apply tweaks": "Применить",
+    "Applying": "Применение",
+    "Applying tweaks...": "Применение твиков...",
+    "Auto-fixing...": "Автоисправление...",
+    "Automatic maintenance in Task Scheduler: a weekly cleanup and a monthly health check. They run as SYSTEM, unattended, without a restore point and never touch the Dangerous tier.": "Автоматическое обслуживание через Планировщик заданий: еженедельная очистка и ежемесячная проверка состояния. Задания работают от имени SYSTEM, без участия пользователя, без точки восстановления и никогда не трогают опасный уровень.",
+    "Automatic maintenance stops. You can install it again at any time.": "Автоматическое обслуживание прекратится. Его можно установить снова в любой момент.",
+    "B": "Б",
+    "Backup": "Резервная копия",
+    "Backups: {0}": "Резервные копии: {0}",
+    "Caches of running browsers are skipped: {0}.": "Кэш запущенных браузеров будет пропущен: {0}.",
+    "Cancel": "Отмена",
+    "Cancel and quit": "Прервать и выйти",
+    "Cancelled - nothing applied.": "Отменено - ничего не применено.",
+    "Cancelled.": "Отменено.",
+    "Cancelling...": "Отмена...",
+    "Check": "Проверка",
+    "Check for updates": "Проверить обновления",
+    "Check this PC": "Проверьте этот компьютер",
+    "Clean {0} task(s) now?": "Выполнить очистку ({0} задач)?",
+    "Clean now": "Очистить",
+    "Cleaning": "Очистка",
+    "Cleaning...": "Очистка...",
+    "Cleanup": "Очистка",
+    "Cleanup cancelled.": "Очистка отменена.",
+    "Cleanup finished - {0} freed.": "Очистка завершена - освобождено {0}.",
+    "CLEANUPS": "ОЧИСТОК",
+    "Clear": "Очистить",
+    "Close running browsers first": "Сначала закрыть браузеры",
+    "Command": "Команда",
+    "Command: {0}": "Команда: {0}",
+    "Common Startup folder": "Общая папка автозагрузки",
+    "Conservative mode": "Осторожный режим",
+    "Console menu": "Консольное меню",
+    "Continue": "Продолжить",
+    "Could not change {0}: {1}": "Не удалось изменить {0}: {1}",
+    "Could not restart: {0}": "Не удалось перезапустить: {0}",
+    "Create restore point now": "Создать точку восстановления",
+    "Created": "Создана",
+    "Creating": "Создание",
+    "Creating restore point...": "Создание точки восстановления...",
+    "Ctrl+1 ... Ctrl+9 - switch pages     Ctrl+F - search     F5 - scan / refresh the page     Ctrl+L - show or hide the log     Esc - clear search": "Ctrl+1 ... Ctrl+9 - переключение страниц     Ctrl+F - поиск     F5 - проверить / обновить страницу     Ctrl+L - показать или скрыть журнал     Esc - очистить поиск",
+    "Current user": "Текущий пользователь",
+    "Current user only": "Только текущий пользователь",
+    "Dangerous": "Опасная",
+    "DANGEROUS - IRREVERSIBLE ({0}):": "ОПАСНЫЕ - НЕОБРАТИМЫЕ ({0}):",
+    "Date": "Дата",
+    "days": "дн.",
+    "Delete locked files at reboot": "Удалять занятые файлы при перезагрузке",
+    "Detail": "Подробности",
+    "Disabled": "Выключено",
+    "Disk cleanup": "Очистка диска",
+    "Dismiss": "Скрыть",
+    "Done in {0} s.": "Готово за {0} с.",
+    "Drive-level tasks limited to: {0}": "Задачи уровня дисков только для: {0}",
+    "DRIVES": "ДИСКИ",
+    "Drives:": "Диски:",
+    "Dry run": "Проверка",
+    "Each Apply run saves the previous values of everything it changes. Undo puts them back.": "Каждое применение сохраняет прежние значения всего, что меняет. Отмена возвращает их обратно.",
+    "Enabled": "Включено",
+    "Engine": "Модуль",
+    "Engine logs (%TEMP%)": "Журналы модулей (%TEMP%)",
+    "Engine logs: {0}": "Журналы модулей: {0}",
+    "English": "English",
+    "Enter whole days from 0 to 3650 (0 = no age filter).": "Введите целое число дней от 0 до 3650 (0 = без фильтра по возрасту).",
+    "Errors": "Ошибки",
+    "Estimated:": "Оценка:",
+    "Every backup has already been undone.": "Все резервные копии уже отменены.",
+    "Every change is backed up first and can be reverted from Undo & restore.": "Каждое изменение сначала сохраняется, и его можно отменить на странице «Откат и восстановление».",
+    "Every run's report - from this app and from the scheduled tasks. Double-click a run to open it, or export it as a web page.": "Отчёт о каждом запуске - из приложения и из заданий по расписанию. Дважды щёлкните запуск, чтобы открыть его как веб-страницу.",
+    "Every Sunday 03:00 - cleanup with the recommended tasks": "Каждое воскресенье в 03:00 - очистка с рекомендуемыми задачами",
+    "Export as web page": "Открыть как веб-страницу",
+    "Exported {0}": "Сохранено: {0}",
+    "Failed to start.": "Не удалось запустить.",
+    "File not found: {0}": "Файл не найден: {0}",
+    "Files": "Файлы",
+    "Files in use are queued and removed on the next restart.": "Занятые файлы ставятся в очередь и удаляются при следующем запуске Windows.",
+    "Finished with an error - see the log.": "Завершено с ошибкой - смотрите журнал.",
+    "Finished with exit code {0} - see the log.": "Завершено с кодом {0} - смотрите журнал.",
+    "Finished with exit code {0}.": "Завершено с кодом {0}.",
+    "Fix": "Исправление",
+    "Fix everything": "Исправить всё",
+    "Fix everything (incl. heavy)": "Исправить всё (включая тяжёлое)",
+    "Fix everything?": "Исправить всё?",
+    "Fix selected": "Исправить выбранное",
+    "Fix: {0}   [{1}]": "Исправление: {0}   [{1}]",
+    "{0} freed": "освобождено {0}",
+    "Freed {0}": "Освобождено {0}",
+    "FREED ALL TIME": "ОСВОБОЖДЕНО ЗА ВСЁ ВРЕМЯ",
+    "GB": "ГБ",
+    "GitHub": "GitHub",
+    "Health check: {0} problem(s), {1} warning(s).": "Проверка состояния: проблем - {0}, предупреждений - {1}.",
+    "Health check: everything looks fine.": "Проверка состояния: всё в порядке.",
+    "healthy": "в порядке",
+    "History": "История",
+    "HKCU Run": "HKCU Run",
+    "HKLM Run": "HKLM Run",
+    "HKLM Run (32-bit)": "HKLM Run (32-бит)",
+    "Install copies the engine scripts to {0} (writable by administrators only) and the tasks run from there - never from this folder. Remove deletes that copy. Reports go to {1} and show up in History.": "Установка копирует скрипты модулей в {0} (запись только для администраторов), и задания запускаются оттуда, а не из этой папки. Удаление стирает эту копию. Отчёты сохраняются в {1} и видны в «Истории».",
+    "Install scheduled tasks": "Установить задания",
+    "Installing scheduled tasks...": "Установка заданий...",
+    "IRREVERSIBLE - only runs when ticked by hand.": "НЕОБРАТИМО - выполняется, только если отмечено вручную.",
+    "JUNK FOUND": "НАЙДЕНО МУСОРА",
+    "KB": "КБ",
+    "Keyboard shortcuts": "Сочетания клавиш",
+    "Language": "Язык",
+    "Language, where things are kept, and links.": "Язык, где хранятся данные, и ссылки.",
+    "Last check: {0}": "Последняя проверка: {0}",
+    "LAST CLEANUP": "ПОСЛЕДНЯЯ ОЧИСТКА",
+    "Last result: {0}": "Последний результат: {0}",
+    "Last run": "Последний запуск",
+    "Leave other Windows accounts untouched.": "Не трогать другие учётные записи Windows.",
+    "Leave out the slow component-store tasks.": "Пропустить медленные задачи хранилища компонентов.",
+    "Limited rights": "Ограниченные права",
+    "Live": "Выполнено",
+    "Location": "Расположение",
+    "Log": "Журнал",
+    "Log files": "Файлы журнала",
+    "Logs": "Журналы",
+    "MAINTENANCE": "ОБСЛУЖИВАНИЕ",
+    "MB": "МБ",
+    "MIT License - free and open source.": "Лицензия MIT - бесплатно и с открытым исходным кодом.",
+    "Mode": "Режим",
+    "Moderate": "Умеренная",
+    "Name": "Имя",
+    "Needs closed: {0}": "Нужно закрыть: {0}",
+    "Never": "Никогда",
+    "not yet": "ещё не было",
+    "Next run": "Следующий запуск",
+    "No backups found.": "Резервные копии не найдены.",
+    "No cleanup has run yet.": "Очистка ещё не запускалась.",
+    "no drive ticked": "не выбран ни один диск",
+    "No fixes selected.": "Исправления не выбраны.",
+    "No reports yet.": "Отчётов пока нет.",
+    "NO restore point will be created.": "Точка восстановления НЕ будет создана.",
+    "No runs yet": "Запусков пока не было",
+    "No runs yet. Reports of every scan, cleanup and repair will show up here.": "Запусков пока не было. Здесь появятся отчёты о каждой проверке, очистке и исправлении.",
+    "No size estimate yet - press Scan first to see what would be freed.": "Оценки объёма пока нет - сначала нажмите «Проверить», чтобы увидеть, сколько освободится.",
+    "select none": "снять все",
+    "None": "Ничего",
+    "not administrator: All-users entries cannot be changed": "нет прав администратора: записи «Все пользователи» изменить нельзя",
+    "Not applied": "Не применён",
+    "Not checked yet - press Smart scan.": "Ещё не проверялось - нажмите «Умная проверка».",
+    "Not installed": "Не установлено",
+    "not scanned": "не проверено",
+    "Not scanned yet - press Scan.": "Проверка ещё не выполнялась - нажмите «Проверить».",
+    "Nothing selected.": "Ничего не выбрано.",
+    "Nothing to run - no task is ticked (or the options hold them all back).": "Нечего выполнять - не отмечено ни одной задачи (или параметры исключают их все).",
+    "Nothing was changed. Press Clean now to free the space, or Review to see the problems.": "Ничего не изменено. Нажмите «Очистить», чтобы освободить место, или «Подробнее», чтобы посмотреть проблемы.",
+    "Nothing was changed. The log lists every value.": "Ничего не изменено. В журнале перечислены все значения.",
+    "Nothing was deleted.": "Ничего не удалено.",
+    "of {0} start with Windows": "из {0} запускаются с Windows",
+    "OK": "ОК",
+    "Only files older than": "Только файлы старше",
+    "Only files older than {0} days.": "Только файлы старше {0} дн.",
+    "Only Safe and Moderate tasks run, even if others are ticked.": "Выполняются только безопасные и умеренные задачи, даже если отмечены другие.",
+    "Open file location": "Расположение файла",
+    "Open folder": "Открыть папку",
+    "Open raw report": "Открыть JSON-отчёт",
+    "Open System Restore": "Открыть восстановление системы",
+    "Open the log to see what went wrong.": "Откройте журнал, чтобы увидеть, что пошло не так.",
+    "OPTIMIZATION": "ОПТИМИЗАЦИЯ",
+    "Optimization backups": "Резервные копии оптимизации",
+    "Optimize": "Оптимизация",
+    "Optimize Windows": "Оптимизация Windows",
+    "Options": "Параметры",
+    "Overview": "Обзор",
+    "Paths:": "Пути:",
+    "Performance, privacy, debloat and network tweaks. Every change is backed up first and can be reverted from Undo & restore.": "Твики производительности, конфиденциальности, удаления лишнего и сети. Каждое изменение сначала сохраняется, и его можно отменить на странице «Откат и восстановление».",
+    "Press Smart scan to measure it.": "Нажмите «Умная проверка», чтобы измерить.",
+    "Preview": "Предпросмотр",
+    "Preview: {0} tweak(s) would change.": "Предпросмотр: изменится твиков - {0}.",
+    "Previewing": "Предпросмотр",
+    "Previewing tweaks...": "Предпросмотр твиков...",
+    "Problem": "Проблема",
+    "Problems: {0}": "Проблем: {0}",
+    "Warnings: {0}": "Предупреждений: {0}",
+    "Diagnostics": "Диагностика",
+    "problems": "проблем",
+    "Programs that start with Windows. Switch one off to disable it the way Task Manager does - the entry is kept, so switching it on restores it exactly.": "Программы, которые запускаются вместе с Windows. Выключите переключатель, чтобы отключить программу так же, как это делает Диспетчер задач: запись сохраняется, и при включении всё вернётся как было.",
+    "Quit Windows Senior?": "Выйти из Windows Senior?",
+    "reading the current state...": "чтение текущего состояния...",
+    "Ready": "Готово",
+    "Ready.": "Готово.",
+    "Recent activity": "Последние действия",
+    "Recommended": "Рекомендуемые",
+    "Refresh": "Обновить",
+    "Registry: {0}": "Реестр: {0}",
+    "Remove": "Удалить",
+    "Remove the scheduled tasks?": "Удалить задания по расписанию?",
+    "Removing scheduled tasks...": "Удаление заданий...",
+    "Repair": "Исправление",
+    "Repair {0} problem(s) now?": "Исправить проблемы ({0})?",
+    "Repaired {0} problem(s), {1} failed.": "Исправлено проблем: {0}, не удалось: {1}.",
+    "Repairing": "Исправление",
+    "Repairing...": "Исправление...",
+    "report only": "только отчёт",
+    "Report only - no automatic fix.": "Только отчёт - автоматического исправления нет.",
+    "REPORTS": "ОТЧЁТОВ",
+    "Reports: {0}": "Отчёты: {0}",
+    "Re-read which tweaks are currently applied": "Перечитать, какие твики сейчас применены",
+    "Restart as administrator": "Перезапустить от администратора",
+    "Restart needed": "Нужна перезагрузка",
+    "Restart now": "Перезапустить",
+    "Restart to switch the language?": "Перезапустить, чтобы сменить язык?",
+    "Restart Windows to finish the repair.": "Перезагрузите Windows, чтобы завершить исправление.",
+    "Restore point created.": "Точка восстановления создана.",
+    "Restore point first": "Сначала точка восстановления",
+    "Result": "Результат",
+    "Revert the {0} tweak(s) from {1} ({2}).": "Отменить твики ({0}) из {1} ({2}).",
+    "Revert the tweaks from {0}.": "Отменить твики из {0}.",
+    "Reverting": "Отмена",
+    "Reverting newest run...": "Отмена последнего применения...",
+    "Reverting selected backup...": "Отмена выбранной копии...",
+    "Review": "Подробнее",
+    "Risk": "Риск",
+    "Run a scan or a cleanup - its report will appear here.": "Запустите проверку или очистку - отчёт появится здесь.",
+    "Run reports: {0}": "Отчёты запусков: {0}",
+    "Running": "Выполняется",
+    "Running browsers WILL BE CLOSED first: {0} - save your work.": "Запущенные браузеры БУДУТ ЗАКРЫТЫ: {0} - сохраните свою работу.",
+    "Running without administrator rights - cleaning system folders, tweaks and repairs will fail.": "Запущено без прав администратора - очистка системных папок, твики и исправления не сработают.",
+    "Runs a scripted action (tool-driven cleanup, measured before/after).": "Выполняет скриптовое действие (очистка штатным средством, объём замеряется до и после).",
+    "Runs scripts from an old location - press Install again to move them to {0}.": "Запускает скрипты из старого расположения - нажмите «Установить» ещё раз, чтобы перенести их в {0}.",
+    "Safe": "Безопасная",
+    "Safe only": "Только безопасные",
+    "SAFETY & HISTORY": "БЕЗОПАСНОСТЬ И ИСТОРИЯ",
+    "Safety nets: revert an optimization run from its backup, or create a System Restore point right now.": "Страховка: отмените применение оптимизации по резервной копии или создайте точку восстановления системы прямо сейчас.",
+    "Save log": "Сохранить журнал",
+    "Saved {0}": "Сохранено: {0}",
+    "Scan": "Проверить",
+    "Scan complete. {0} problem(s) can be fixed here - the Safe and Moderate fixes are pre-ticked.": "Проверка завершена. Здесь можно исправить проблем: {0}. Безопасные и умеренные исправления уже отмечены.",
+    "Scan complete. Nothing here needs an automatic fix.": "Проверка завершена. Ничего не требует автоматического исправления.",
+    "Scan finished - {0} can be freed.": "Проверка завершена - можно освободить {0}.",
+    "Scan measures what each task would free - nothing is deleted. Clean removes the ticked tasks. Hover a task to see exactly which folders it touches.": "Проверка измеряет, сколько освободит каждая задача, ничего не удаляя. «Очистить» выполняет отмеченные задачи. Наведите на задачу, чтобы увидеть, какие папки она затрагивает.",
+    "Scanning": "Проверка",
+    "Scanning (dry run)...": "Проверка (без удаления)...",
+    "Scanning for problems...": "Поиск проблем...",
+    "Schedule": "Расписание",
+    "Scheduled": "По расписанию",
+    "Scheduled maintenance is installed.": "Обслуживание по расписанию установлено.",
+    "Scheduled tasks": "Задания по расписанию",
+    "Scheduled tasks disabled:": "Отключаемые задания планировщика:",
+    "Scope": "Область",
+    "Scripted tweak (backed up and reverted by its own undo step).": "Скриптовый твик (сохраняется и отменяется собственным шагом отмены).",
+    "Search apps": "Поиск программ",
+    "Search checks": "Поиск проверок",
+    "Search tasks": "Поиск задач",
+    "Search tweaks": "Поиск твиков",
+    "Select a backup first.": "Сначала выберите резервную копию.",
+    "Select an entry first.": "Сначала выберите запись.",
+    "Select:": "Выбрать:",
+    "Selected {0} of {1} tasks": "Выбрано задач: {0} из {1}",
+    "Selected {0} of {1} tweaks": "Выбрано твиков: {0} из {1}",
+    "Service: {0} -> {1}": "Служба: {0} -> {1}",
+    "Settings & about": "Настройки",
+    "Settings: {0}": "Настройки: {0}",
+    "Show log": "Показать журнал",
+    "showing {0}": "показано: {0}",
+    "Skip SFC / DISM": "Пропустить SFC / DISM",
+    "skipped ({0})": "пропущено ({0})",
+    "Skipped": "Пропущено",
+    "Skipped {0}, errors {1}. Undo & restore can revert this run.": "Пропущено: {0}, ошибок: {1}. Отменить можно на странице «Откат и восстановление».",
+    "Smart scan": "Умная проверка",
+    "Smart scan finished: {0} of junk, {1} problem(s), {2} warning(s).": "Умная проверка завершена: мусора - {0}, проблем - {1}, предупреждений - {2}.",
+    "Smart scan measures the junk the cleanup would remove and runs the read-only health checks. Nothing is changed until you confirm.": "Умная проверка измеряет мусор, который удалит очистка, и запускает проверки состояния только на чтение. Ничего не меняется без вашего подтверждения.",
+    "Some changes take effect after signing out or restarting.": "Некоторые изменения вступят в силу после выхода из системы или перезагрузки.",
+    "Source": "Источник",
+    "Source: {0}": "Источник: {0}",
+    "Startup apps": "Автозагрузка",
+    "AUTOSTART": "АВТОЗАГРУЗКА",
+    "Startup folder": "Папка автозагрузки",
+    "State": "Состояние",
+    "State stored in: {0}": "Состояние хранится в: {0}",
+    "Status": "Статус",
+    "Stops services while cleaning: {0}": "Останавливает службы на время очистки: {0}",
+    "System default": "Как в системе",
+    "SYSTEM HEALTH": "СОСТОЯНИЕ СИСТЕМЫ",
+    "System Protection may be off for drive C:, or Windows allows one point per 24 hours. See the log.": "Возможно, защита системы для диска C: выключена, или Windows разрешает только одну точку в сутки. Смотрите журнал.",
+    "System Restore": "Восстановление системы",
+    "Task": "Задача",
+    "Task Manager": "Диспетчер задач",
+    "Task Scheduler": "Планировщик заданий",
+    "TB": "ТБ",
+    "The \"older than\" box needs whole days from 0 to 3650.": "В поле «старше» нужно целое число дней от 0 до 3650.",
+    "The fix needs a reboot to finish.": "Для завершения исправления нужна перезагрузка.",
+    "The operation could not start.": "Операцию не удалось запустить.",
+    "The operation was stopped. Whatever finished before that stays done.": "Операция прервана. То, что успело выполниться, осталось выполненным.",
+    "The optimization run was reverted.": "Применение оптимизации отменено.",
+    "The restore point was NOT created.": "Точка восстановления НЕ создана.",
+    "The scan is read-only. Afterwards tick the problems you want repaired and press Fix. Heavy repairs (SFC, DISM, Windows Update reset, network stack) may need a reboot.": "Проверка только читает данные. Затем отметьте проблемы, которые нужно исправить, и нажмите «Исправить». Тяжёлые исправления (SFC, DISM, сброс Центра обновления Windows, сетевого стека) могут потребовать перезагрузки.",
+    "The window closes and opens again in the new language. Nothing else changes.": "Окно закроется и откроется снова на новом языке. Больше ничего не изменится.",
+    "The window restarts to switch the language. Engine log lines stay in English.": "Для смены языка окно перезапускается. Строки журнала модулей остаются на английском.",
+    "This backup was already undone once.": "Эта копия уже была отменена один раз.",
+    "This window drives the same PowerShell engines as the console menu and the command line, so every action keeps the real dry run, the delete safety guard, System Restore points and per-tweak undo.": "Окно управляет теми же модулями PowerShell, что и консольное меню и командная строка, поэтому у каждого действия сохраняются честная проверка без удаления, защита от удаления лишнего, точки восстановления и отмена каждого твика.",
+    "Tick at least one drive.": "Отметьте хотя бы один диск.",
+    "today, {0}": "сегодня, {0}",
+    "Troubleshoot": "Диагностика",
+    "Tweak": "Твик",
+    "Tweaks": "Твики",
+    "tweaks applied": "твиков применено",
+    "Undo": "Отменить",
+    "Undo & restore": "Откат и восстановление",
+    "Undo newest run": "Отменить последнее",
+    "Undo selected": "Отменить выбранное",
+    "Undo the newest optimization run?": "Отменить последнее применение оптимизации?",
+    "Undo this optimization run?": "Отменить это применение оптимизации?",
+    "Undone": "Отменено",
+    "Unknown": "Неизвестно",
+    "Unreadable": "Нечитаемо",
+    "Unticked: caches of running browsers are skipped.": "Если снято: кэш запущенных браузеров пропускается.",
+    "up {0} d {1} h": "работает {0} дн. {1} ч",
+    "up {0} h {1} min": "работает {0} ч {1} мин",
+    "Use \"Restart as administrator\" at the top of the window.": "Нажмите «Перезапустить от администратора» вверху окна.",
+    "Wait for the running operation to finish first.": "Сначала дождитесь завершения текущей операции.",
+    "Warning": "Внимание",
+    "warnings": "предупреждений",
+    "Web page": "Веб-страница",
+    "Weekly cleanup on Sundays at 03:00, health scan on the 1st of each month.": "Еженедельная очистка по воскресеньям в 03:00, проверка состояния 1-го числа каждого месяца.",
+    "Windows Senior": "Windows Senior",
+    "Windows Senior {0} - cleaner, optimizer and troubleshooter for Windows 10 and 11.": "Windows Senior {0} - очистка, оптимизация и диагностика Windows 10 и 11.",
+    "WinSenior.Startup.ps1 is missing - keep it next to WinSenior.Gui.ps1.": "Нет файла WinSenior.Startup.ps1 - он должен лежать рядом с WinSenior.Gui.ps1.",
+    "WinSenior.Startup.ps1 not found": "Файл WinSenior.Startup.ps1 не найден",
+    "Would apply {0} tweak(s)": "Будет применено твиков: {0}",
+    "Would free": "Освободит",
+    "Would free {0}": "Освободит {0}",
+    "yesterday, {0}": "вчера, {0}"
+  },
+  "groups": {
+    "Browsers": "Браузеры",
+    "DevTools": "Инструменты разработчика",
+    "Apps": "Приложения",
+    "Games": "Игры",
+    "System": "Система",
+    "Disks": "Диски",
+    "Logs": "Журналы",
+    "Updates": "Обновления",
+    "Optimization": "Оптимизация",
+    "Performance": "Производительность",
+    "Privacy": "Конфиденциальность",
+    "Debloat": "Удаление лишнего",
+    "Network": "Сеть",
+    "Integrity": "Целостность",
+    "Disk": "Диск",
+    "Update": "Обновление",
+    "Devices": "Устройства",
+    "Services": "Службы",
+    "Security": "Безопасность"
+  },
+  "tasks": {
+    "chrome": {
+      "name": "Кэш Chrome",
+      "explain": ""
+    },
+    "edge": {
+      "name": "Кэш Edge",
+      "explain": ""
+    },
+    "firefox": {
+      "name": "Кэш Firefox",
+      "explain": ""
+    },
+    "opera": {
+      "name": "Кэш Opera",
+      "explain": ""
+    },
+    "yandex": {
+      "name": "Кэш Яндекс Браузера",
+      "explain": ""
+    },
+    "brave": {
+      "name": "Кэш Brave",
+      "explain": ""
+    },
+    "vivaldi": {
+      "name": "Кэш Vivaldi",
+      "explain": ""
+    },
+    "chrome-ai-model": {
+      "name": "Локальная ИИ-модель Chrome (Gemini Nano, ~4 ГБ)",
+      "explain": ""
+    },
+    "npm": {
+      "name": "Кэш npm",
+      "explain": ""
+    },
+    "pip": {
+      "name": "Кэш pip",
+      "explain": ""
+    },
+    "nuget": {
+      "name": "HTTP-кэш NuGet",
+      "explain": ""
+    },
+    "yarn": {
+      "name": "Кэш Yarn",
+      "explain": ""
+    },
+    "gradle": {
+      "name": "Кэш Gradle",
+      "explain": ""
+    },
+    "vscode": {
+      "name": "Кэш VS Code",
+      "explain": ""
+    },
+    "jetbrains": {
+      "name": "Кэш, журналы и временные файлы JetBrains IDE",
+      "explain": ""
+    },
+    "nuitka": {
+      "name": "Кэш сборки Nuitka",
+      "explain": ""
+    },
+    "docker": {
+      "name": "Висячие образы и кэш сборки Docker",
+      "explain": ""
+    },
+    "pnpm": {
+      "name": "Хранилище pnpm (удаление неиспользуемого)",
+      "explain": ""
+    },
+    "pkgmgr": {
+      "name": "Кэши менеджеров пакетов и сборки (winget/choco/scoop/conda/cargo/go/pub)",
+      "explain": ""
+    },
+    "ps-modulecache": {
+      "name": "Кэш анализа модулей PowerShell",
+      "explain": ""
+    },
+    "vs": {
+      "name": "Кэши компонентов и IntelliSense Visual Studio",
+      "explain": ""
+    },
+    "python-tools": {
+      "name": "Кэши инструментов Python (uv / poetry / pipx / pyenv)",
+      "explain": ""
+    },
+    "java-tools": {
+      "name": "Кэши сборки JVM (дистрибутивы Maven/Gradle wrapper, sbt boot, kotlin daemon)",
+      "explain": ""
+    },
+    "dotnet-tools": {
+      "name": "Временные файлы и кэши телеметрии .NET SDK",
+      "explain": ""
+    },
+    "node-tools": {
+      "name": "Кэши инструментов Node (node-gyp / electron / bun / deno / Cypress)",
+      "explain": ""
+    },
+    "git-tools": {
+      "name": "Журналы и кэш GitHub Desktop",
+      "explain": ""
+    },
+    "composer-php": {
+      "name": "Кэш PHP Composer",
+      "explain": ""
+    },
+    "ml-caches": {
+      "name": "Кэши ML-моделей и автоматизации браузера (HuggingFace / torch / Playwright / Puppeteer)",
+      "explain": ""
+    },
+    "nuget-global": {
+      "name": "Глобальная папка пакетов NuGet (скачивается заново при восстановлении)",
+      "explain": ""
+    },
+    "docker-logs": {
+      "name": "Журналы и кэши Docker Desktop / WSL",
+      "explain": ""
+    },
+    "appcache": {
+      "name": "Кэш приложений Windows",
+      "explain": ""
+    },
+    "teams": {
+      "name": "Кэш Microsoft Teams",
+      "explain": ""
+    },
+    "teams-new": {
+      "name": "Кэш нового Microsoft Teams",
+      "explain": ""
+    },
+    "webview2": {
+      "name": "Кэши приложений WebView2 (новый Outlook, виджеты, Copilot и др.)",
+      "explain": ""
+    },
+    "discord": {
+      "name": "Кэш Discord",
+      "explain": ""
+    },
+    "slack": {
+      "name": "Кэш Slack",
+      "explain": ""
+    },
+    "spotify": {
+      "name": "Кэш Spotify",
+      "explain": ""
+    },
+    "office": {
+      "name": "Кэш документов и веб-кэш Office",
+      "explain": ""
+    },
+    "office-c2r": {
+      "name": "Загрузки обновлений Office Click-to-Run (старше 7 дней)",
+      "explain": ""
+    },
+    "onedrive": {
+      "name": "Журналы OneDrive",
+      "explain": ""
+    },
+    "adobe-media": {
+      "name": "Медиакэш Adobe и кэш Camera Raw",
+      "explain": ""
+    },
+    "rdp-cache": {
+      "name": "Растровый кэш клиента удалённого рабочего стола",
+      "explain": ""
+    },
+    "telegram": {
+      "name": "Медиакэш Telegram Desktop",
+      "explain": ""
+    },
+    "whatsapp": {
+      "name": "Кэш WhatsApp Desktop",
+      "explain": ""
+    },
+    "messengers": {
+      "name": "Кэши и журналы Zoom / Skype / Signal / Viber",
+      "explain": ""
+    },
+    "electron-generic": {
+      "name": "Кэши приложений на Electron/Chromium (любые приложения в AppData)",
+      "explain": ""
+    },
+    "media-players": {
+      "name": "Кэши медиаплееров (VLC / iTunes / Windows Media Player / Plex)",
+      "explain": ""
+    },
+    "uwp-caches": {
+      "name": "Временные данные и локальные кэши приложений Store (UWP)",
+      "explain": ""
+    },
+    "notifications": {
+      "name": "Кэш изображений уведомлений и вспомогательные кэши проводника",
+      "explain": ""
+    },
+    "gpu-apps": {
+      "name": "Кэши и телеметрия приложений производителей GPU (NVIDIA App / GeForce Experience / AMD / Intel)",
+      "explain": ""
+    },
+    "game-caches": {
+      "name": "Кэши игровых лаунчеров (Steam/Epic/Battle.net/GOG)",
+      "explain": ""
+    },
+    "game-logs": {
+      "name": "Журналы и аварийные дампы игровых лаунчеров (Steam/Epic/EA/Ubisoft/Riot/Xbox)",
+      "explain": ""
+    },
+    "game-engines": {
+      "name": "Кэши игровых движков (Unreal DDC / Unity / Godot)",
+      "explain": ""
+    },
+    "game-shaders": {
+      "name": "Кэши шейдеров игр на всех дисках (библиотеки Steam / игры на Unity)",
+      "explain": ""
+    },
+    "temp-user": {
+      "name": "Временные файлы пользователя",
+      "explain": ""
+    },
+    "temp-windows": {
+      "name": "Временные файлы Windows",
+      "explain": ""
+    },
+    "inetcache": {
+      "name": "Кэш Internet Explorer/WinINet",
+      "explain": ""
+    },
+    "thumbnails": {
+      "name": "Кэш эскизов и значков",
+      "explain": ""
+    },
+    "shadercache": {
+      "name": "Кэш шейдеров GPU / D3D",
+      "explain": ""
+    },
+    "win-caches": {
+      "name": "Пользовательские кэши приложений Windows",
+      "explain": ""
+    },
+    "gpu-leftovers": {
+      "name": "Остатки установщиков драйверов GPU (NVIDIA/AMD)",
+      "explain": ""
+    },
+    "webcache": {
+      "name": "База данных WebCache WinINet",
+      "explain": ""
+    },
+    "deliveryopt": {
+      "name": "Кэш оптимизации доставки",
+      "explain": ""
+    },
+    "systemtemp": {
+      "name": "Системная временная папка (Windows\\SystemTemp)",
+      "explain": ""
+    },
+    "svc-temp": {
+      "name": "Временные папки служебных учётных записей (LocalService / NetworkService / профиль системы)",
+      "explain": ""
+    },
+    "upgrade-logs": {
+      "name": "Журналы установки, обновления и обслуживания Windows (Panther, CBS, USO, WindowsUpdate.log)",
+      "explain": ""
+    },
+    "win-misc": {
+      "name": "Прочие кэши Windows (автономные веб-страницы, временные файлы поиска, PerfLogs)",
+      "explain": ""
+    },
+    "bits-cache": {
+      "name": "Сброс очереди передач BITS (отменяет все фоновые загрузки)",
+      "explain": ""
+    },
+    "dns-flush": {
+      "name": "Очистка кэшей DNS, ARP и NetBIOS",
+      "explain": ""
+    },
+    "store-reset": {
+      "name": "Сброс кэша Microsoft Store (WSReset, без окна)",
+      "explain": ""
+    },
+    "memory-standby": {
+      "name": "Очистка резервной памяти и сокращение рабочих наборов (освобождает ОЗУ, а не диск)",
+      "explain": ""
+    },
+    "recent": {
+      "name": "Список последних элементов",
+      "explain": ""
+    },
+    "jumplists": {
+      "name": "Списки переходов (открепляет элементы списков переходов; закрепления панели быстрого доступа сохраняются)",
+      "explain": ""
+    },
+    "fontcache": {
+      "name": "Кэш шрифтов",
+      "explain": ""
+    },
+    "winlogs": {
+      "name": "Файлы журналов Windows",
+      "explain": ""
+    },
+    "prefetch": {
+      "name": "Prefetch (загрузка медленнее до перестроения)",
+      "explain": ""
+    },
+    "search-index": {
+      "name": "Перестроить индекс поиска Windows (удаляет Windows.edb, переиндексация в фоне)",
+      "explain": ""
+    },
+    "old-drivers": {
+      "name": "Удалить устаревшие пакеты драйверов (pnputil)",
+      "explain": ""
+    },
+    "disk-temp": {
+      "name": "Временные папки в корне дисков (все локальные диски, старше 7 дней)",
+      "explain": ""
+    },
+    "disk-chkdsk": {
+      "name": "Восстановленные фрагменты CHKDSK (FOUND.*)",
+      "explain": ""
+    },
+    "wer": {
+      "name": "Отчёты об ошибках Windows",
+      "explain": ""
+    },
+    "extra-logs": {
+      "name": "Журналы установки и установки устройств",
+      "explain": ""
+    },
+    "livekernel": {
+      "name": "Дампы Live Kernel (драйвер/GPU TDR)",
+      "explain": ""
+    },
+    "diag-telemetry": {
+      "name": "Кэши диагностики и телеметрии (Diagnosis, трассировки ETL, SleepStudy, WDI)",
+      "explain": ""
+    },
+    "app-logs": {
+      "name": "Журналы сторонних приложений (Adobe, Autodesk, Corsair, Logitech, Razer, Intel, PowerToys, Terminal)",
+      "explain": ""
+    },
+    "installer-leftovers": {
+      "name": "Остатки установщиков (временные файлы MSI, Squirrel/NSIS/Inno, загрузки обновлений Chrome/Edge)",
+      "explain": ""
+    },
+    "empty-dirs": {
+      "name": "Удалить пустые папки во временных расположениях",
+      "explain": ""
+    },
+    "srum-db": {
+      "name": "База телеметрии использования сети и приложений (SRUM)",
+      "explain": ""
+    },
+    "eventtranscript": {
+      "name": "База диагностической телеметрии (EventTranscript)",
+      "explain": ""
+    },
+    "crashdumps": {
+      "name": "Аварийные дампы и дампы памяти",
+      "explain": ""
+    },
+    "iislogs": {
+      "name": "Старые журналы IIS (старше 14 дней)",
+      "explain": ""
+    },
+    "recyclebin": {
+      "name": "Корзина (все пользователи, все диски)",
+      "explain": ""
+    },
+    "eventlogs": {
+      "name": "Очистить журналы событий (с предварительной архивацией)",
+      "explain": ""
+    },
+    "wu-cache": {
+      "name": "Кэш загрузок Центра обновления Windows",
+      "explain": ""
+    },
+    "wu-full": {
+      "name": "Полный сброс SoftwareDistribution (стирает журнал обновлений)",
+      "explain": ""
+    },
+    "patchcache": {
+      "name": "Кэш исправлений установщика Windows",
+      "explain": ""
+    },
+    "windows-old": {
+      "name": "Windows.old и остатки обновления",
+      "explain": ""
+    },
+    "upgrade-leftovers": {
+      "name": "Остатки помощника по обновлению и сброса ($GetCurrent, Windows10Upgrade, $SysReset)",
+      "explain": ""
+    },
+    "hiberfil": {
+      "name": "Отключить гибернацию и удалить hiberfil.sys (также отключает быстрый запуск)",
+      "explain": ""
+    },
+    "shadow-old": {
+      "name": "Удалить все точки восстановления / теневые копии, кроме последней (vssadmin)",
+      "explain": ""
+    },
+    "dism-analyze": {
+      "name": "Анализ хранилища компонентов (только отчёт)",
+      "explain": ""
+    },
+    "component-task": {
+      "name": "Запустить задание StartComponentCleanup (в фоне)",
+      "explain": ""
+    },
+    "dism-cleanup": {
+      "name": "Очистка компонентов DISM",
+      "explain": ""
+    },
+    "dism-resetbase": {
+      "name": "DISM ResetBase (установленные обновления больше нельзя будет удалить)",
+      "explain": ""
+    },
+    "dism-logs": {
+      "name": "Журналы DISM (старше 7 дней)",
+      "explain": ""
+    },
+    "sfc": {
+      "name": "Проверка системных файлов (sfc /scannow)",
+      "explain": ""
+    }
+  },
+  "tweaks": {
+    "perf-visualfx": {
+      "name": "Визуальные эффекты: быстродействие, со сглаживанием шрифтов",
+      "explain": "Особые параметры быстродействия: анимации, затухания и тени отключены, но сглаживание шрифтов ClearType и отображение содержимого окна при перетаскивании сохранены. Полностью применяется после выхода из системы."
+    },
+    "perf-menudelay": {
+      "name": "Нулевая задержка открытия меню",
+      "explain": "Меню открываются мгновенно, а не через стандартные 400 мс."
+    },
+    "perf-startupdelay": {
+      "name": "Убрать задержку автозагрузки",
+      "explain": "Программы из автозагрузки запускаются без искусственной задержки ~10 с."
+    },
+    "perf-bgapps": {
+      "name": "Отключить фоновые приложения",
+      "explain": "Запрещает UWP-приложениям работать и обновляться в фоне. По умолчанию выключено: ломает уведомления «Связи с телефоном», «Почты/Календаря» и «Будильников»; выигрыш на современных сборках ничтожен."
+    },
+    "perf-faststartup": {
+      "name": "Отключить быстрый запуск (гибридную загрузку)",
+      "explain": "Обеспечивает чистое полное завершение работы (устраняет проблемы с часами и файловой системой при двойной загрузке). По умолчанию выключено; холодная загрузка немного медленнее."
+    },
+    "perf-power-high": {
+      "name": "Схема питания: высокая производительность",
+      "explain": "Переключает активную схему питания на «Высокая производительность» (без снижения частоты ЦП в простое). Автоматически пропускается при наличии батареи или на устройствах с Modern Standby, где эта схема недоступна."
+    },
+    "perf-power-ultimate": {
+      "name": "Схема питания: максимальная производительность",
+      "explain": "Создаёт (однократно, с фиксированным GUID) и активирует скрытую схему «Максимальная производительность». Только для настольных ПК и рабочих станций; выше энергопотребление в простое. Отмена возвращает предыдущую схему и удаляет созданную."
+    },
+    "perf-usb-suspend": {
+      "name": "Отключить временное отключение USB-порта (от сети)",
+      "explain": "Windows перестаёт отключать питание простаивающих USB-портов при работе от сети (устраняет пропадание USB-аудио, мышей и хабов). Поведение от батареи не меняется. По умолчанию выключено; немного выше энергопотребление в простое."
+    },
+    "perf-powerthrottling": {
+      "name": "Отключить регулирование мощности (EcoQoS)",
+      "explain": "Windows перестаёт переводить фоновые процессы в режим эффективности. По умолчанию выключено: сокращает время работы ноутбуков от батареи; на настольных ПК выигрыш мал."
+    },
+    "perf-hags": {
+      "name": "Включить аппаратное ускорение планирования GPU",
+      "explain": "Позволяет GPU самому управлять планированием памяти (HAGS). Требуется драйвер WDDM 2.7+ и перезагрузка; иначе игнорируется. По умолчанию выключено: с некоторыми драйверами возможны подтормаживания или проблемы с захватом."
+    },
+    "perf-wu-latest": {
+      "name": "Не получать обновления сразу после выхода",
+      "explain": "Отключает «Получать последние обновления, как только они станут доступны» (ранние функции). На обновления безопасности и ежемесячные обновления не влияет."
+    },
+    "perf-edge-bg": {
+      "name": "Запретить Edge предзагрузку и работу в фоне",
+      "explain": "Отключает ускорение запуска Edge и фоновый режим, чтобы закрытый Edge не оставался в памяти. Edge будет показывать «Вашим браузером управляет ваша организация» (безобидное уведомление о политике)."
+    },
+    "perf-reserved-storage": {
+      "name": "Отключить зарезервированное хранилище",
+      "explain": "Освобождает ~7 ГБ, которые Windows резервирует для обновлений. По умолчанию выключено: на устройствах с малым объёмом диска обновления компонентов могут не устанавливаться. Нельзя изменить, пока ожидается установка обновления (Windows 10 2004+)."
+    },
+    "perf-sysmain": {
+      "name": "Отключить SysMain (Superfetch)",
+      "explain": "Снижает нагрузку на ОЗУ и диск. Полезно на SSD; на HDD может замедлить запуск приложений. По умолчанию выключено."
+    },
+    "perf-wsearch": {
+      "name": "Отключить индексирование поиска Windows",
+      "explain": "Останавливает индексатор (меньше нагрузка на диск и ЦП), но поиск в меню «Пуск» и проводнике становится медленнее. По умолчанию выключено."
+    },
+    "perf-hibernate": {
+      "name": "Отключить гибернацию (удалить hiberfil.sys)",
+      "explain": "Освобождает несколько ГБ, занятых hiberfil.sys, и отключает быстрый запуск. По умолчанию выключено."
+    },
+    "priv-telemetry": {
+      "name": "Минимизировать телеметрию (политика)",
+      "explain": "Устанавливает минимальный уровень диагностических данных, допустимый для выпуска, и скрывает запросы отзывов."
+    },
+    "priv-adid": {
+      "name": "Отключить рекламный идентификатор",
+      "explain": "Запрещает приложениям использовать рекламный идентификатор пользователя."
+    },
+    "priv-consumer": {
+      "name": "Отключить потребительские функции / автоустановку приложений",
+      "explain": "Политика потребительских функций (только Корпоративная/для образовательных учреждений; в Домашней/Pro игнорируется). В Домашней/Pro продвигаемые приложения перестают устанавливаться благодаря пользовательским параметрам ContentDeliveryManager в debloat-start-ads и priv-tips."
+    },
+    "priv-tips": {
+      "name": "Отключить советы, предложения и Spotlight",
+      "explain": "Отключает советы Windows, интересные факты Spotlight на экране блокировки и предложения в «Параметрах»."
+    },
+    "priv-activity": {
+      "name": "Отключить журнал действий / временную шкалу",
+      "explain": "Windows перестаёт собирать и отправлять журнал действий / временную шкалу."
+    },
+    "priv-websearch": {
+      "name": "Отключить веб-поиск в меню «Пуск»",
+      "explain": "Убирает веб-результаты Bing, веб-предложения и «основные моменты поиска» из поиска в «Пуске» и на панели задач. Побочный эффект: политика предложений также скрывает недавние запросы поиска в проводнике."
+    },
+    "priv-cortana": {
+      "name": "Отключить Cortana (политика)",
+      "explain": "Отключает помощника Cortana через групповую политику."
+    },
+    "priv-diagtrack": {
+      "name": "Отключить функциональные возможности для подключённых пользователей (DiagTrack)",
+      "explain": "Останавливает основную службу телеметрии, отправляющую диагностические данные."
+    },
+    "priv-dmwappush": {
+      "name": "Отключить службу маршрутизации push-сообщений WAP",
+      "explain": "Отключает push-канал управления устройствами, который также используется для передачи телеметрии. По умолчанию выключено: ломает синхронизацию политик Intune/MDM на рабочих ПК."
+    },
+    "priv-telemetry-tasks": {
+      "name": "Отключить задания CEIP и телеметрии в планировщике",
+      "explain": "Отключает периодические задания, собирающие и отправляющие данные об использовании и совместимости. Примечание: при отключённом Compatibility Appraiser Центр обновления Windows может позже предлагать следующее обновление компонентов (пригодность перепроверяется при обновлении)."
+    },
+    "priv-recall": {
+      "name": "Отключить Recall и Click-to-Do (ИИ-анализ экрана)",
+      "explain": "Блокирует снимки Windows Recall и ИИ-анализ экрана Click-to-Do (Win11 24H2+; на старых сборках ничего не делает)."
+    },
+    "priv-recall-remove": {
+      "name": "Удалить компонент Recall (политика)",
+      "explain": "Windows удаляет дополнительный компонент Recall (Win11 24H2 сборка 26100.3915+; в остальных случаях ничего не делает). Вступает в силу после перезагрузки; отмена удаляет политику, чтобы Recall можно было вернуть."
+    },
+    "priv-copilot": {
+      "name": "Отключить Windows Copilot (устаревшая политика)",
+      "explain": "Отключает встроенную боковую панель Copilot через пользовательскую политику. Устарело: действует только в Windows 10 и Windows 11 23H2 и ранее; новое приложение Copilot её игнорирует (см. debloat-copilot-app)."
+    },
+    "priv-ai-paint": {
+      "name": "Отключить ИИ-функции в Paint",
+      "explain": "Отключает Cocreator, генеративную заливку и Image Creator в Paint (Win11). На старые версии Paint не влияет."
+    },
+    "priv-ai-notepad": {
+      "name": "Отключить ИИ-функции в Блокноте",
+      "explain": "Скрывает переписывание и пересказ Copilot в Блокноте (Win11 Notepad 11.2410+). На старый Блокнот не влияет."
+    },
+    "priv-chrome-ai": {
+      "name": "Запретить Chrome скачивать локальную ИИ-модель",
+      "explain": "Не даёт Chrome скачать локальную модель Gemini Nano (~4 ГБ); локальные ИИ-функции перестанут работать. Chrome будет показывать «управляется вашей организацией». Безвредно, если Chrome не установлен."
+    },
+    "priv-tailored": {
+      "name": "Отключить персонализированные возможности (реклама на основе диагностики)",
+      "explain": "Windows перестаёт использовать ваши диагностические данные для показа персональных советов и рекламы."
+    },
+    "priv-spotlight": {
+      "name": "Отключить смену изображений Windows Spotlight на экране блокировки",
+      "explain": "Останавливает смену картинок и рекламы Spotlight и «интересные факты» на экране блокировки; остаётся статичное изображение. Пользовательская политика действует только в Корпоративной/для образовательных учреждений; параметры ContentDeliveryManager покрывают Домашнюю/Pro."
+    },
+    "priv-settings-ads": {
+      "name": "Отключить рекомендуемое содержимое в «Параметрах»",
+      "explain": "Скрывает рекламные и рекомендуемые карточки в приложении «Параметры»."
+    },
+    "priv-suggested-actions": {
+      "name": "Отключить предлагаемые действия при копировании",
+      "explain": "Убирает всплывающее окно с предложением действий (позвонить, добавить в календарь) при копировании номера телефона или даты (Win11 22H2+)."
+    },
+    "priv-langlist": {
+      "name": "Скрыть список языков от веб-сайтов",
+      "explain": "Сайты больше не могут читать список установленных языков для показа локального содержимого (снижает возможность отслеживания по отпечатку)."
+    },
+    "priv-trackprogs": {
+      "name": "Не отслеживать запуск приложений",
+      "explain": "Windows перестаёт записывать, какие приложения вы запускаете. По умолчанию выключено: очищает список «Часто используемые» в «Пуске» и историю окна «Выполнить»."
+    },
+    "priv-findmydevice": {
+      "name": "Отключить «Поиск устройства»",
+      "explain": "Прекращает периодическую отправку местоположения для функции «Поиск устройства». По умолчанию выключено: вы не сможете найти или заблокировать потерянный ноутбук."
+    },
+    "priv-location": {
+      "name": "Запретить приложениям доступ к местоположению (политика)",
+      "explain": "Принудительно запрещает местоположение всем приложениям. По умолчанию выключено: ломает автоматический выбор часового пояса, «Погоду», «Карты» и местоположение для «Поиска устройства»."
+    },
+    "priv-input": {
+      "name": "Отключить персонализацию рукописного ввода и ввода с клавиатуры",
+      "explain": "Прекращает сбор нажатий клавиш и рукописного ввода для персонализации. Локальный голосовой ввод продолжает работать."
+    },
+    "priv-typing": {
+      "name": "Не отправлять в Microsoft данные ввода с клавиатуры и рукописного ввода",
+      "explain": "Отключает канал отправки аналитики ввода."
+    },
+    "priv-speech": {
+      "name": "Отказаться от распознавания речи в сети",
+      "explain": "Отключает облачную обработку голоса. Автономный голосовой ввод не затрагивается."
+    },
+    "priv-ceip": {
+      "name": "Отключить программу улучшения качества программного обеспечения",
+      "explain": "Отключает главный переключатель CEIP и соответствующую политику (дополняет настройку заданий CEIP в планировщике)."
+    },
+    "priv-appcompat": {
+      "name": "Отключить телеметрию совместимости приложений",
+      "explain": "Останавливает инвентаризацию Application Compatibility Appraiser, передающую данные в телеметрию."
+    },
+    "priv-wer": {
+      "name": "Отключить отправку отчётов об ошибках Windows",
+      "explain": "Блокирует отправку отчётов о сбоях в Microsoft. Локальные журналы сбоев по-прежнему создаются."
+    },
+    "priv-feedback": {
+      "name": "Никогда не запрашивать отзывы о Windows",
+      "explain": "Отключает периодические запросы «оцените свои впечатления»."
+    },
+    "priv-deliveryopt": {
+      "name": "Отключить P2P-раздачу оптимизации доставки",
+      "explain": "Прекращает раздачу файлов обновлений другим ПК через интернет (только HTTP; Центр обновления Windows не отключается)."
+    },
+    "priv-onedrive": {
+      "name": "Блокировать сетевой трафик OneDrive до входа в систему",
+      "explain": "OneDrive не обращается к сети, пока пользователь не вошёл в систему. OneDrive не отключается."
+    },
+    "priv-clipboard": {
+      "name": "Отключить облачную синхронизацию буфера обмена",
+      "explain": "Содержимое буфера обмена больше не синхронизируется между устройствами через учётную запись Microsoft. По умолчанию выключено."
+    },
+    "debloat-junk": {
+      "name": "Удалить предустановленные ненужные приложения",
+      "explain": "Удаляет явный мусор (игры King, Solitaire, 3D Viewer, Clipchamp, «Карты», «Новости»/«Погода» и т. д.) для всех пользователей. «Техническая поддержка» сохраняется (через неё работают средства устранения неполадок Win11). Переустановка — из Store."
+    },
+    "debloat-xbox": {
+      "name": "Удалить приложения Xbox",
+      "explain": "Удаляет приложение Xbox, оверлей Game Bar и связанные пакеты. По умолчанию выключено (геймерам они могут быть нужны). Переустановка — из Store."
+    },
+    "debloat-comms": {
+      "name": "Удалить «Почту»/«Календарь», Skype, «Связь с телефоном»",
+      "explain": "Удаляет набор коммуникационных приложений. По умолчанию выключено (некоторые пользуются «Почтой»/«Календарём»). Переустановка — из Store."
+    },
+    "debloat-copilot-app": {
+      "name": "Удалить приложение Copilot (текущий пользователь)",
+      "explain": "Удаляет приложение Microsoft.Copilot из Store для текущего пользователя (в Win11 24H2+ Copilot поставляется как приложение, которое устаревшая политика уже не контролирует). По умолчанию выключено. Переустановка — из Store."
+    },
+    "debloat-start-ads": {
+      "name": "Отключить предложения приложений в меню «Пуск»",
+      "explain": "Меню «Пуск» перестаёт показывать рекомендуемые/продвигаемые приложения."
+    },
+    "debloat-taskbar-ads": {
+      "name": "Скрыть рекламные элементы панели задач, «Пуска» и проводника",
+      "explain": "Скрывает советы и рекламу учётной записи в разделе «Рекомендуем» меню «Пуск», рекламу поставщиков синхронизации в проводнике и кнопку «Чат» Win11 22H2 (в 23H2+ ничего не делает). Кнопкой виджетов управляет debloat-widgets-policy (драйвер UCPD блокирует запись TaskbarDa в актуальных Win11)."
+    },
+    "debloat-widgets-policy": {
+      "name": "Отключить виджеты (политика)",
+      "explain": "Отключает панель виджетов Win11 и убирает её кнопку с панели задач для всего компьютера (работает там, где TaskbarDa заблокирован). Требуется выход из системы или перезапуск проводника."
+    },
+    "debloat-feeds-w10": {
+      "name": "Отключить «Новости и интересы» (Win10)",
+      "explain": "Убирает ленту погоды и новостей с панели задач Windows 10. На Windows 11 не влияет."
+    },
+    "debloat-meetnow": {
+      "name": "Скрыть кнопку «Провести собрание» (Win10)",
+      "explain": "Скрывает значок Skype «Провести собрание» в области уведомлений Windows 10. На Windows 11 не влияет."
+    },
+    "debloat-edge": {
+      "name": "Убрать боковую панель, покупки и рекомендации Edge",
+      "explain": "Скрывает боковую панель Edge (кнопку Copilot), всплывающие купоны для покупок и рекомендации функций. Сам Edge не затрагивается, но будет показывать «Вашим браузером управляет ваша организация»."
+    },
+    "debloat-start-reco": {
+      "name": "Скрыть раздел «Рекомендуем» в меню «Пуск» (политика)",
+      "explain": "Полностью убирает раздел «Рекомендуем» из «Пуска» Win11. Учитывается только в выпусках для образовательных учреждений/SE (и новых Корпоративных); в Домашней/Pro ничего не делает. По умолчанию выключено."
+    },
+    "debloat-stickykeys": {
+      "name": "Отключить сочетание залипания клавиш (Shift ×5)",
+      "explain": "Пятикратное нажатие Shift больше не вызывает окно залипания клавиш (частая проблема в играх). Залипание клавиш по-прежнему можно включить в «Параметрах»."
+    },
+    "debloat-scoobe": {
+      "name": "Отключить навязчивую донастройку после обновлений (SCOOBE)",
+      "explain": "Убирает полноэкранное предложение «Давайте завершим настройку устройства» после обновлений."
+    },
+    "ux-fileext": {
+      "name": "Показывать расширения файлов в проводнике",
+      "explain": "Показывает расширения для известных типов файлов (безопасность + удобство). По умолчанию выключено (на ваш вкус)."
+    },
+    "ux-context-menu": {
+      "name": "Вернуть классическое контекстное меню Win10",
+      "explain": "Возвращает полное контекстное меню Windows 10 в Windows 11. По умолчанию выключено (на ваш вкус); нужен перезапуск проводника."
+    },
+    "ux-explorer-home-gallery": {
+      "name": "Скрыть «Главная» и «Коллекция» в проводнике",
+      "explain": "Убирает пункты «Главная» и «Коллекция» из области навигации проводника Win11. По умолчанию выключено (на ваш вкус); нужен перезапуск проводника. Используйте вместе с ux-launch-thispc."
+    },
+    "ux-launch-thispc": {
+      "name": "Открывать проводник на «Этот компьютер»",
+      "explain": "Проводник открывается на «Этот компьютер», а не на «Главная»/«Панель быстрого доступа». По умолчанию выключено (на ваш вкус)."
+    },
+    "ux-hidden": {
+      "name": "Показывать скрытые файлы в проводнике",
+      "explain": "Показывает скрытые файлы и папки (защищённые системные файлы остаются скрытыми). По умолчанию выключено (на ваш вкус)."
+    },
+    "ux-endtask": {
+      "name": "Добавить «Завершить задачу» в контекстное меню панели задач",
+      "explain": "Добавляет пункт «Завершить задачу» в меню приложений на панели задач (Win11 23H2+). По умолчанию выключено (на ваш вкус)."
+    },
+    "ux-mouseaccel": {
+      "name": "Отключить ускорение мыши",
+      "explain": "Отключает «Повышенную точность установки указателя» для движения указателя 1:1 (для игр). По умолчанию выключено (на ваш вкус); применяется после выхода из системы."
+    },
+    "net-gamedvr": {
+      "name": "Отключить GameDVR / фоновую запись",
+      "explain": "Отключает фоновую запись игр и захват приложений, которые могут отнимать кадры и ресурсы ЦП. Оптимизация во весь экран не затрагивается."
+    },
+    "net-gamedvr-policy": {
+      "name": "Отключить GameDVR (политика)",
+      "explain": "Принудительно отключает GameDVR для всего компьютера через политику. По умолчанию выключено: также делает неактивными настройки захвата Game Bar для всех пользователей (пользовательский переключатель покрывает net-gamedvr)."
+    },
+    "net-gamemode": {
+      "name": "Включить игровой режим",
+      "explain": "Отдаёт приоритет активной игре при планировании ЦП и GPU."
+    },
+    "net-throttling": {
+      "name": "Отключить регулирование сети / резерв для мультимедиа",
+      "explain": "Снимает сетевое ограничение MMCSS и снижает долю ЦП, резервируемую для низкоприоритетных задач во время воспроизведения мультимедиа, с 20% до 10% (MMCSS возвращает значения ниже 10 к 20). По умолчанию выключено: влияет только на аудио- и видеопотоки, зарегистрированные в MMCSS; для большинства игр — плацебо."
+    },
+    "net-teredo": {
+      "name": "Отключить туннелирование IPv6 Teredo",
+      "explain": "Отключает через политику только туннель Teredo (остальные параметры перехода на IPv6 не затрагиваются). По умолчанию выключено; может повлиять на групповой чат Xbox и обход NAT в некоторых P2P-сценариях."
+    },
+    "net-ndu": {
+      "name": "Отключить монитор использования сетевых данных (NDU)",
+      "explain": "Останавливает драйвер NDU, который может потреблять много памяти. По умолчанию выключено; пропадает статистика использования данных по приложениям."
+    },
+    "net-nagle": {
+      "name": "Отключить алгоритм Nagle (ниже задержка)",
+      "explain": "Устанавливает TcpAckFrequency=1 / TCPNoDelay=1 на активных интерфейсах для снижения задержки в играх. По умолчанию выключено."
+    }
+  },
+  "checks": {
+    "img-health": {
+      "name": "Целостность образа системы (DISM)",
+      "fix": "DISM RestoreHealth + SFC"
+    },
+    "disk-smart": {
+      "name": "Состояние физических дисков (SMART)",
+      "fix": ""
+    },
+    "disk-space": {
+      "name": "Мало свободного места на диске",
+      "fix": ""
+    },
+    "disk-dirty": {
+      "name": "Ошибки файловой системы (dirty bit / NTFS / события диска)",
+      "fix": "Repair-Volume -Scan (онлайн), -SpotFix при наличии ошибок"
+    },
+    "disk-reliability": {
+      "name": "Износ и температура SSD",
+      "fix": ""
+    },
+    "trim": {
+      "name": "TRIM для SSD и оптимизация по расписанию",
+      "fix": "Включить TRIM + оптимизацию дисков по расписанию"
+    },
+    "reboot-pending": {
+      "name": "Ожидается перезагрузка",
+      "fix": "Отметить необходимость перезагрузки (без автоматического перезапуска)"
+    },
+    "wu-health": {
+      "name": "Компоненты Центра обновления Windows",
+      "fix": "Сбросить Центр обновления Windows (переименовать SoftwareDistribution/catroot2)"
+    },
+    "wu-policy": {
+      "name": "Центр обновления Windows заблокирован политикой",
+      "fix": "Создать резервную копию и удалить политики, блокирующие Центр обновления Windows"
+    },
+    "wu-history": {
+      "name": "Ошибки установки обновлений Windows",
+      "fix": ""
+    },
+    "bits-health": {
+      "name": "Очередь передач BITS",
+      "fix": "Удалить задания BITS, зависшие в состоянии ошибки"
+    },
+    "net-connectivity": {
+      "name": "Интернет и DNS",
+      "fix": "Очистить кэш DNS; сброс winsock/IP — только при полном отсутствии сети (стирает статический IP)"
+    },
+    "net-adapter": {
+      "name": "Сетевые адаптеры и служба WLAN",
+      "fix": "Включить отключённые адаптеры + запустить службу автонастройки WLAN"
+    },
+    "winsock-lsp": {
+      "name": "Каталог Winsock (повреждённый LSP)",
+      "fix": "netsh winsock reset"
+    },
+    "hosts-integrity": {
+      "name": "Целостность файла hosts",
+      "fix": "Удалить только вредоносные строки hosts (с резервной копией)"
+    },
+    "proxy-hijack": {
+      "name": "Подмена прокси / PAC",
+      "fix": "Сбросить параметры прокси WinINET/WinHTTP"
+    },
+    "dev-errors": {
+      "name": "Устройства с проблемами драйверов",
+      "fix": "Повторно обнаружить устройства (pnputil /scan-devices)"
+    },
+    "svc-critical": {
+      "name": "Остановлены критически важные службы",
+      "fix": "Запустить остановленные критически важные службы"
+    },
+    "svc-defaults": {
+      "name": "Отключены основные службы",
+      "fix": "Восстановить стандартный тип запуска отключённых основных служб"
+    },
+    "spooler-health": {
+      "name": "Диспетчер печати",
+      "fix": "Очистить очередь печати + перезапустить диспетчер печати"
+    },
+    "search-health": {
+      "name": "Индекс поиска Windows",
+      "fix": "Перестроить индекс поиска"
+    },
+    "def-health": {
+      "name": "Состояние Microsoft Defender",
+      "fix": "Включить защиту в реальном времени + обновить сигнатуры"
+    },
+    "def-signatures": {
+      "name": "Сигнатуры и угрозы Defender",
+      "fix": "Обновить сигнатуры Defender"
+    },
+    "def-exclusions": {
+      "name": "Опасные исключения Defender",
+      "fix": ""
+    },
+    "firewall-state": {
+      "name": "Брандмауэр Windows включён",
+      "fix": "Снова включить все профили брандмауэра"
+    },
+    "smb1-disabled": {
+      "name": "Протокол SMBv1 отключён",
+      "fix": "Отключить SMBv1 (очень старые NAS/принтеры могут потерять общий доступ)"
+    },
+    "uac-enabled": {
+      "name": "Контроль учётных записей включён",
+      "fix": "Снова включить UAC (EnableLUA=1)"
+    },
+    "bitlocker": {
+      "name": "Защита BitLocker (системный диск)",
+      "fix": "Возобновить защиту BitLocker"
+    },
+    "secureboot-cert": {
+      "name": "Безопасная загрузка и обновление сертификатов 2023",
+      "fix": ""
+    },
+    "rootcert-update": {
+      "name": "Автообновление корневых сертификатов",
+      "fix": "Снова включить автообновление корневых сертификатов"
+    },
+    "wmi-repo": {
+      "name": "Целостность репозитория WMI",
+      "fix": "Восстановить репозиторий WMI (salvage)"
+    },
+    "time-sync": {
+      "name": "Синхронизация системного времени",
+      "fix": "Включить синхронизацию времени + синхронизировать часы"
+    },
+    "event-errors": {
+      "name": "Недавние критические события и ошибки",
+      "fix": ""
+    },
+    "crash-history": {
+      "name": "Недавние сбои (BSOD / неожиданное завершение работы)",
+      "fix": ""
+    },
+    "restore-enabled": {
+      "name": "Защита системы (восстановление)",
+      "fix": "Включить восстановление системы + создать точку восстановления"
+    },
+    "sched-task-health": {
+      "name": "Критически важные задания планировщика включены",
+      "fix": "Снова включить критически важные задания планировщика (проверенный список)"
+    },
+    "store-health": {
+      "name": "Состояние Microsoft Store",
+      "fix": "Сбросить кэш Store (wsreset)"
+    },
+    "shell-appx": {
+      "name": "Пакеты меню «Пуск» / оболочки",
+      "fix": "Перерегистрировать пакеты «Пуска» и оболочки (текущий пользователь)"
+    },
+    "winre": {
+      "name": "Среда восстановления Windows",
+      "fix": "Включить WinRE (reagentc /enable)"
+    },
+    "pagefile": {
+      "name": "Файл подкачки и выделенная память",
+      "fix": "Разрешить Windows управлять файлом подкачки"
+    },
+    "env-path": {
+      "name": "Системные переменные PATH и TEMP",
+      "fix": "Вернуть стандартные записи PATH (с резервной копией) + создать отсутствующие папки TEMP"
+    },
+    "verifier-on": {
+      "name": "Driver Verifier оставлен включённым",
+      "fix": "Отключить Driver Verifier (verifier /reset)"
+    },
+    "activation": {
+      "name": "Активация Windows",
+      "fix": ""
+    }
+  }
+}

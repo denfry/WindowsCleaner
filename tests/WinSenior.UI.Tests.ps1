@@ -135,6 +135,31 @@ Describe 'Get-ChecklistFrame' {
         $f = Get-ChecklistFrame -Title 'P' -Items $items -Cursor 0 -OnSet $on -Width 50
         ($f | Where-Object { $_.Text -match 'Xeq' }).Text | Should -Match '\(applied\)'
     }
+    Context 'long lists (-MaxBody)' {
+        BeforeAll {
+            $script:many = @(1..60 | ForEach-Object { [pscustomobject]@{ Id = "t$_"; Name = "Task$_"; Group = "G$([int][Math]::Ceiling($_ / 20))"; Risk = 'Safe' } })
+            $script:none = New-Object 'System.Collections.Generic.HashSet[string]'
+        }
+        It 'keeps the frame height constant while the cursor moves' {
+            $h = @(0, 30, 59 | ForEach-Object {
+                @(Get-ChecklistFrame -Title 'P' -Items $script:many -Cursor $_ -OnSet $script:none -Width 50 -MaxBody 12).Count
+            } | Sort-Object -Unique)
+            $h.Count | Should -Be 1
+        }
+        It 'always shows the cursor row and says how much is hidden' {
+            foreach ($c in 0, 30, 59) {
+                $f = Get-ChecklistFrame -Title 'P' -Items $script:many -Cursor $c -OnSet $script:none -Width 50 -MaxBody 12
+                ($f | Where-Object Highlight).Text | Should -Match "Task$($c + 1)\b"
+            }
+            $mid = Get-ChecklistFrame -Title 'P' -Items $script:many -Cursor 30 -OnSet $script:none -Width 50 -MaxBody 12
+            @($mid | Where-Object { $_.Text -match 'more above' }).Count | Should -Be 1
+            @($mid | Where-Object { $_.Text -match 'more below' }).Count | Should -Be 1
+        }
+        It 'draws everything when no limit is given' {
+            $f = Get-ChecklistFrame -Title 'P' -Items $script:many -Cursor 0 -OnSet $script:none -Width 50
+            @($f | Where-Object { $_.Text -match 'Task\d+' }).Count | Should -Be 60
+        }
+    }
 }
 
 Describe 'Read-MenuKey' {

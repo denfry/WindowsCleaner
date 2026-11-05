@@ -4,6 +4,48 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.4.0] - 2026-11-05
+
+A redesign of the desktop app: a start page, a calmer layout, Russian, and no frozen window.
+
+### Added
+- **Overview page** (the new start page): disks with free-space bars, last cleanup, applied
+  tweaks, startup apps, recent runs — and **Smart scan**, which measures the junk and runs the
+  read-only health checks in one go, with *Clean now* / *Review* on the result.
+- **Russian UI** (`WinSenior.Gui.ru.json`): every screen, dialog, task, tweak and check name.
+  Follows the Windows display language; switch under *Settings & about*.
+- Lists **grouped by category** with collapsible headers and *select all / none* per group;
+  the name column fills the window.
+- **Result banner** after every run (freed space, problems found, errors, what to do next).
+- **Themed confirmation dialogs** instead of the grey message boxes.
+- *Restart as administrator* banner when the app runs with limited rights.
+- Keyboard shortcuts (Ctrl+1…9, Ctrl+F, F5, Ctrl+L, Esc), taskbar progress, dark title bar,
+  window size/position and log-drawer state remembered.
+- Schedule page shows each task's state, next and last run (and what Install will set up).
+
+### Changed
+- The log is a drawer behind the *Log* button instead of a permanent third of the window.
+- Cleanup options live behind an *Options* button, each with a one-line explanation.
+- Startup apps use on/off switches; History opens a run as a web page on double-click.
+- Dark scroll bars, list headers, check boxes and inputs throughout.
+
+### Fixed
+- **The Optimize page froze the window for ~8 s** while it read the tweak state (the
+  ScheduledTasks module alone loads in ~3 s). The state is now read in a background runspace.
+- **Purge standby memory never worked**: the `TOKEN_PRIVILEGES` struct put the LUID at
+  offset 8 instead of 4, so the privilege was never enabled — and the task still logged
+  "RAM freed". It now enables the privilege correctly and reports failures.
+- `Cleanup -Category Browsers,DevTools` through `-File` (scheduler, GPO) selected nothing:
+  the list arrived as one string and was not split.
+- The monthly scheduled task failed to register where the time separator is not `:`
+  (fi-FI, da-DK under PowerShell 7).
+- The web installer removed the old version before moving the new one in place, which fails
+  across drives on Windows PowerShell 5.1 and left no app; it now copies next to the target
+  and swaps by renaming.
+- Console menu: long checklists (100+ cleanup tasks) now scroll around the cursor instead of
+  running off the window, and frames are painted where the screen was cleared, not at buffer
+  row 0. *Create restore point* logs to the cleanup log instead of the repair log.
+
 ## [6.3.0] - 2026-09-23
 
 A correctness and safety release: every engine was audited against Microsoft's
