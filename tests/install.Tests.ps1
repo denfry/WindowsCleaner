@@ -46,7 +46,26 @@ Describe 'install.ps1' {
         $rel = Join-Path $TestDrive 'rel-un'; New-FakeRelease -Dir $rel
         $root = Join-Path $TestDrive 'root-un'
         & $script:Installer -Source $rel -InstallRoot $root -NoLaunch -NoShortcut 6>$null
-        & $script:Installer -Source $rel -InstallRoot $root -Uninstall -NoShortcut 6>$null
+        & $script:Installer -Source $rel -InstallRoot $root -Uninstall -NoShortcut -TaskFolder '\WinSeniorTest-none' -MachineRoot (Join-Path $TestDrive 'pf-none') 6>$null
         Test-Path (Join-Path $root 'app') | Should -BeFalse
+    }
+
+    It 'also removes the machine-wide copy and the task folder' {
+        $rel = Join-Path $TestDrive 'rel-un2'; New-FakeRelease -Dir $rel
+        $root = Join-Path $TestDrive 'root-un2'
+        $pf = Join-Path $TestDrive 'pf\WinSenior'; New-Item -ItemType Directory -Path $pf -Force | Out-Null
+        Set-Content (Join-Path $pf 'Cleanup-Windows-Senior.ps1') '#'
+        $folder = '\WinSeniorTest-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+        $svc = New-Object -ComObject Schedule.Service; $svc.Connect()
+        # creating a Task Scheduler folder needs admin (CI runners are); otherwise test the folder part only
+        $made = $true
+        try { [void]$svc.GetFolder('\').CreateFolder($folder.TrimStart('\')) } catch { $made = $false; $folder = '\WinSeniorTest-none' }
+        try {
+            & $script:Installer -Source $rel -InstallRoot $root -NoLaunch -NoShortcut 6>$null
+            & $script:Installer -Source $rel -InstallRoot $root -Uninstall -NoShortcut -TaskFolder $folder -MachineRoot $pf 6>$null
+            Test-Path $pf | Should -BeFalse
+            if ($made) { { $svc.GetFolder($folder) } | Should -Throw }
+        }
+        finally { try { $svc.GetFolder('\').DeleteFolder($folder.TrimStart('\'), 0) } catch { Write-Verbose 'already gone' } }
     }
 }

@@ -64,7 +64,7 @@ $i = [scriptblock]::Create((irm https://github.com/denfry/WindowsCleaner/release
 & $i -NoLaunch        # install / update only
 & $i -Console         # open the arrow-key console menu instead of the app
 & $i -NoShortcut      # no Start menu / desktop shortcuts
-& $i -Uninstall       # remove the app and its shortcuts
+& $i -Uninstall       # remove the app, shortcuts, scheduled tasks and %ProgramFiles%\WinSenior
 ```
 
 Prefer to read before running? Download `install.ps1` from the
@@ -357,7 +357,7 @@ official sources only: Microsoft Update, `winget`, and the GPU vendor's own site
 # Apps: inventory, silent uninstall + leftovers, winget updates / installs
 .\WinSenior.Apps.ps1 -List
 .\WinSenior.Apps.ps1 -Updates                 # or -UpdateAll
-.\WinSenior.Apps.ps1 -Uninstall 'App name' -RemoveLeftovers
+.\WinSenior.Apps.ps1 -Uninstall 'App name' -RemoveLeftovers   # leftovers go to a 30-day quarantine
 .\WinSenior.Apps.ps1 -Catalog                 # then: -Install Mozilla.Firefox,7zip.7zip
 
 # Smart memory: free RAM held by leftovers (build daemons, orphaned Java/Node, WSL)

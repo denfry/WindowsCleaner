@@ -70,6 +70,92 @@ Describe 'Get-WsLeftoverConfidence' {
     It 'Bad when another installed app has the same name' {
         Get-WsLeftoverConfidence ([pscustomobject]@{ Path = 'C:\Users\u\AppData\Roaming\Cool Editor'; Leaf = 'Cool Editor' }) $script:App -OtherNames @('Cool Editor 4') | Should -Be 'Bad'
     }
+    It 'does not trust an InstallLocation whose name is unrelated to the app (D:\Games)' {
+        $a = [pscustomobject]@{ Name = 'Cool Game'; Publisher = 'Cool Soft'; InstallLocation = 'D:\Games' }
+        Get-WsLeftoverConfidence ([pscustomobject]@{ Path = 'D:\Games'; Leaf = 'Games' }) $a | Should -Be 'Bad'
+        $b = [pscustomobject]@{ Name = 'Cool Game'; Publisher = 'Cool Soft'; InstallLocation = 'D:\Stuff\Archive' }
+        Get-WsLeftoverConfidence ([pscustomobject]@{ Path = 'D:\Stuff\Archive'; Leaf = 'Archive' }) $b | Should -Be 'Bad'
+    }
+    It 'trusts an InstallLocation named after the publisher' {
+        $a = [pscustomobject]@{ Name = 'Cool Editor'; Publisher = 'Cool Soft'; InstallLocation = 'D:\Apps\CoolSoft' }
+        Get-WsLeftoverConfidence ([pscustomobject]@{ Path = 'D:\Apps\CoolSoft'; Leaf = 'CoolSoft' }) $a | Should -Be 'VeryGood'
+    }
+}
+
+Describe 'Get-WsUninstallCommand scope' {
+    It 'marks HKCU entries to run without elevation' {
+        (Get-WsUninstallCommand ([pscustomobject]@{ Source = 'Win32'; Scope = 'User'; ProductCode = $null; QuietUninstallString = '"C:\Users\u\evil.exe"'; UninstallString = 'x' })).RunAsUser | Should -BeTrue
+        (Get-WsUninstallCommand ([pscustomobject]@{ Source = 'MSI'; Scope = 'User'; ProductCode = '{A}'; QuietUninstallString = ''; UninstallString = '' })).RunAsUser | Should -BeTrue
+        (Get-WsUninstallCommand ([pscustomobject]@{ Source = 'Win32'; Scope = 'Machine'; ProductCode = $null; QuietUninstallString = '"C:\P\u.exe"'; UninstallString = 'x' })).RunAsUser | Should -BeFalse
+    }
+}
+
+Describe 'protected paths' {
+    BeforeAll { $script:Set = New-WsProtectedSet @('C:\Windows', 'C:\Program Files', 'D:\Profiles\Ann', 'D:\Profiles\Ann\Documents') }
+    It 'blocks drive roots, protected folders and their parents' {
+        foreach ($p in 'C:\', 'D:', 'C:\Windows', 'c:\program files\', 'D:\Profiles', 'D:\Profiles\Ann', '\\srv\share') {
+            Test-WsProtectedPath -Path $p -ProtectedSet $script:Set | Should -BeTrue -Because $p
+        }
+    }
+    It 'allows folders inside a protected folder' {
+        Test-WsProtectedPath -Path 'C:\Program Files\Cool Editor' -ProtectedSet $script:Set | Should -BeFalse
+        Test-WsProtectedPath -Path 'D:\Profiles\Ann\AppData\Roaming\Cool' -ProtectedSet $script:Set | Should -BeFalse
+    }
+    It 'knows the real Program Files, profile and Documents of this machine' {
+        $real = New-WsProtectedSet (Get-WsProtectedPath)
+        foreach ($p in $env:ProgramFiles, $env:USERPROFILE, [Environment]::GetFolderPath('MyDocuments'), (Split-Path $env:USERPROFILE)) {
+            Test-WsProtectedPath -Path $p -ProtectedSet $real | Should -BeTrue -Because $p
+        }
+    }
+}
+
+Describe 'leftover safety checks and quarantine' {
+    BeforeAll {
+        $script:Base = Join-Path $TestDrive 'lo'
+        New-Item -ItemType Directory -Path $script:Base -Force | Out-Null
+        $script:Empty = New-WsProtectedSet @()
+        function New-Lo { param([string]$Name) $p = Join-Path $script:Base $Name; New-Item -ItemType Directory -Path $p -Force | Out-Null; $p }
+    }
+    It 'allows a plain data folder' {
+        $p = New-Lo 'Cool Editor'; Set-Content (Join-Path $p 'settings.ini') 'x'
+        Get-WsLeftoverBlocker ([pscustomobject]@{ Kind = 'Folder'; Path = $p }) -ProtectedSet $script:Empty -UserData @() | Should -BeNullOrEmpty
+    }
+    It 'keeps a folder that still contains programs' {
+        $p = New-Lo 'WithExe'; New-Item -ItemType Directory (Join-Path $p 'bin') | Out-Null; Set-Content (Join-Path $p 'bin\tool.exe') 'x'
+        Get-WsLeftoverBlocker ([pscustomobject]@{ Kind = 'Folder'; Path = $p }) -ProtectedSet $script:Empty -UserData @() | Should -Match 'programs'
+    }
+    It 'keeps a folder with a subfolder of another installed app' {
+        $p = New-Lo 'Suite'; New-Item -ItemType Directory (Join-Path $p 'Other Tool') | Out-Null
+        Get-WsLeftoverBlocker ([pscustomobject]@{ Kind = 'Folder'; Path = $p }) -Remaining @([pscustomobject]@{ Name = 'Other Tool'; InstallLocation = '' }) -ProtectedSet $script:Empty -UserData @() |
+            Should -Match 'another installed app'
+    }
+    It 'keeps personal folders, protected folders, links and 8.3 paths' {
+        $p = New-Lo 'Docs\Cool'
+        Get-WsLeftoverBlocker ([pscustomobject]@{ Kind = 'Folder'; Path = $p }) -ProtectedSet $script:Empty -UserData @((Join-Path $script:Base 'Docs')) | Should -Match 'personal'
+        Get-WsLeftoverBlocker ([pscustomobject]@{ Kind = 'Folder'; Path = $p }) -ProtectedSet (New-WsProtectedSet @("$p\x")) -UserData @() | Should -Match 'protected'
+        Get-WsLeftoverBlocker ([pscustomobject]@{ Kind = 'Folder'; Path = 'C:\PROGRA~1\Cool' }) -ProtectedSet $script:Empty -UserData @() | Should -Match '8\.3'
+        $t = New-Lo 'Target'; $j = Join-Path $script:Base 'Junction'
+        cmd /c mklink /J "$j" "$t" | Out-Null
+        Get-WsLeftoverBlocker ([pscustomobject]@{ Kind = 'Folder'; Path = $j }) -ProtectedSet $script:Empty -UserData @() | Should -Match 'link'
+    }
+    It 'moves a leftover to quarantine instead of deleting it, without following junctions' {
+        $p = New-Lo 'Gone App'; Set-Content (Join-Path $p 'a.txt') 'x'
+        $keep = New-Lo 'Precious'; Set-Content (Join-Path $keep 'data.txt') 'keep me'
+        cmd /c mklink /J "$(Join-Path $p 'link')" "$keep" | Out-Null
+        $q = Join-Path $script:Base 'Q'
+        Mock Get-WsLeftoverBlocker { $null }       # TestDrive sits in %TEMP%; the checks are tested above
+        $n = Remove-WsAppLeftover -Leftovers @([pscustomobject]@{ Kind = 'Folder'; Path = $p; Confidence = 'VeryGood'; SizeBytes = 1 }) -QuarantineRoot $q 6>$null
+        $n | Should -Be 1
+        Test-Path $p | Should -BeFalse
+        $batch = @(Get-ChildItem $q -Directory)[0].FullName
+        Test-Path (Join-Path $batch '01-Gone App\a.txt') | Should -BeTrue
+        Test-Path (Join-Path $batch 'manifest.json') | Should -BeTrue
+        # purge after 30 days: the junction is removed, its target survives
+        (Get-Item $batch).CreationTime = (Get-Date).AddDays(-31)
+        Clear-WsAppQuarantine -Root $q | Should -Be 1
+        Test-Path $batch | Should -BeFalse
+        Get-Content (Join-Path $keep 'data.txt') | Should -Be 'keep me'
+    }
 }
 
 Describe 'ConvertFrom-WsWingetTable' {

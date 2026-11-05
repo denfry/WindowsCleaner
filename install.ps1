@@ -19,7 +19,9 @@
         & ([scriptblock]::Create((irm https://github.com/denfry/WindowsCleaner/releases/latest/download/install.ps1))) -NoLaunch
         ... -NoShortcut      no Start menu / desktop shortcuts
         ... -Console         start the arrow-key console menu instead of the app
-        ... -Uninstall       remove the app folder and the shortcuts
+        ... -Uninstall       remove the app, its shortcuts, the \WinSenior\ scheduled tasks
+                             and %ProgramFiles%\WinSenior (asks for Administrator once
+                             if those exist)
 
     Nothing here needs Administrator; the app elevates when it starts.
 
@@ -41,7 +43,13 @@ param(
     [string]$Source = $(if ($env:WINSENIOR_INSTALL_SOURCE) { $env:WINSENIOR_INSTALL_SOURCE } else {
         'https://github.com/denfry/WindowsCleaner/releases/latest/download' }),
     [string]$InstallRoot = $(if ($env:WINSENIOR_INSTALL_ROOT) { $env:WINSENIOR_INSTALL_ROOT } else {
-        Join-Path $env:LOCALAPPDATA 'WinSenior' })
+        Join-Path $env:LOCALAPPDATA 'WinSenior' }),
+    # What -Uninstall removes besides the app (overridable for tests): the Task Scheduler
+    # folder with the scheduled cleanup / health scan / Smart Memory tasks, and the
+    # admins-only copy of the scripts those tasks run.
+    [string]$TaskFolder = $(if ($env:WINSENIOR_TASK_FOLDER) { $env:WINSENIOR_TASK_FOLDER } else { '\WinSenior' }),
+    [string]$MachineRoot = $(if ($env:WINSENIOR_MACHINE_ROOT) { $env:WINSENIOR_MACHINE_ROOT } else {
+        Join-Path $(if ($env:ProgramW6432) { $env:ProgramW6432 } else { $env:ProgramFiles }) 'WinSenior' })
 )
 
 $ErrorActionPreference = 'Stop'
@@ -110,6 +118,60 @@ function New-WinSeniorShortcut {
     $lnk.Save()
 }
 
+# Scheduled tasks + %ProgramFiles%\WinSenior. Task Scheduler is driven through COM, not
+# the ScheduledTasks module (same PSModulePath problem as above). Returns what is left.
+$machineCleanup = @'
+$ErrorActionPreference = 'SilentlyContinue'
+$s = New-Object -ComObject Schedule.Service; $s.Connect()
+try {
+    $f = $s.GetFolder('__FOLDER__')
+    foreach ($t in @($f.GetTasks(1))) { try { $f.DeleteTask($t.Name, 0) } catch { } }
+    if (@($f.GetTasks(1)).Count -eq 0 -and @($f.GetFolders(0)).Count -eq 0) { $s.GetFolder('\').DeleteFolder('__LEAF__', 0) }
+} catch { }
+if (Test-Path -LiteralPath '__ROOT__') { Remove-Item -LiteralPath '__ROOT__' -Recurse -Force }
+'@
+
+function Get-MachineCleanupScript {
+    $q = { param($v) $v -replace "'", "''" }
+    $machineCleanup.Replace('__FOLDER__', (& $q $TaskFolder)).Replace('__LEAF__', (& $q $TaskFolder.Trim('\'))).Replace('__ROOT__', (& $q $MachineRoot))
+}
+
+function Get-MachineLeftover {
+    $left = @()
+    try {
+        $s = New-Object -ComObject Schedule.Service; $s.Connect()
+        $f = $s.GetFolder($TaskFolder)
+        $left += @($f.GetTasks(1) | ForEach-Object { "task $TaskFolder\$($_.Name)" })
+        if (-not $left) { $left += "task folder $TaskFolder" }
+    } catch { Write-Verbose "no task folder $TaskFolder" }
+    if (Test-Path -LiteralPath $MachineRoot) { $left += $MachineRoot }
+    , $left
+}
+
+function Remove-WinSeniorMachinePart {
+    if (-not (Get-MachineLeftover).Count) { return }
+    Write-Step 'Removing scheduled tasks and the machine-wide copy'
+    & ([scriptblock]::Create((Get-MachineCleanupScript)))      # works as far as our rights go
+    if ((Get-MachineLeftover).Count) {
+        # The weekly cleanup runs as SYSTEM and lives in Program Files: only an admin can remove it.
+        Write-Host '    Administrator rights are needed for the rest - confirm the prompt.' -ForegroundColor Yellow
+        $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes((Get-MachineCleanupScript)))
+        try {
+            Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Verb RunAs -Wait -WindowStyle Hidden `
+                -ArgumentList '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $enc
+        } catch { Write-Verbose "elevation declined: $($_.Exception.Message)" }
+    }
+    $left = Get-MachineLeftover
+    if ($left.Count) {
+        Write-Bad 'Not removed (no Administrator rights):'
+        foreach ($l in $left) { Write-Host "      $l" }
+        Write-Host '    In an Administrator PowerShell:' -ForegroundColor DarkGray
+        Write-Host ("      Get-ScheduledTask -TaskPath '{0}\' | Unregister-ScheduledTask -Confirm:`$false" -f $TaskFolder) -ForegroundColor DarkGray
+        Write-Host ("      Remove-Item -LiteralPath '{0}' -Recurse -Force" -f $MachineRoot) -ForegroundColor DarkGray
+    }
+    else { Write-Ok 'Scheduled tasks and the machine-wide copy removed.' }
+}
+
 function Invoke-WinSeniorInstall {
     $appDir = Join-Path $InstallRoot 'app'
     # `irm | iex` cannot take parameters, so the same switches are honoured as env vars.
@@ -123,6 +185,9 @@ function Invoke-WinSeniorInstall {
         }
         if (Test-Path -LiteralPath $appDir) { Remove-Item -LiteralPath $appDir -Recurse -Force }
         Write-Ok "Removed $appDir and the shortcuts."
+        # The tasks would otherwise keep running: the cleanup from Program Files as SYSTEM,
+        # Smart Memory every 10 minutes against a script that no longer exists.
+        Remove-WinSeniorMachinePart
         Write-Host '    Settings, logs and undo backups stay in %ProgramData%\WinSenior (delete by hand if unwanted).'
         return
     }
