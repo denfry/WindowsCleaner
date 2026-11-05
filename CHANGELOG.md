@@ -4,6 +4,65 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.5.0] - 2026-11-05
+
+The all-in-one release: drivers, apps and memory in the same tool, from official sources
+only, plus measurements and statistics instead of guesses.
+
+### Added
+- **Drivers** (`WinSenior.Drivers.ps1`): driver updates from Microsoft Update through the
+  Windows Update Agent, with a timeout so a stuck scan cannot hang the app. GPUs are detected
+  (NVIDIA / AMD / Intel) and pointed at the vendor's own driver page or app, because Windows
+  Update's GPU driver is usually older. GPU updates are held back by default and can be hidden
+  from Windows Update. Problem devices are listed with their Device Manager error explained.
+  Driver store backup and restore use `pnputil`. A policy that silently blocks all driver
+  updates (`ExcludeWUDriversInQualityUpdate`) is detected, and the Troubleshoot fix removes it.
+- **Apps** (`WinSenior.Apps.ps1`):
+  - The inventory covers Win32 (64- and 32-bit, machine and user) and Store apps.
+  - Uninstall runs silently where possible: MSI `/x /qn`, `QuietUninstallString`, Inno Setup
+    `/VERYSILENT`, NSIS `/S`.
+  - After an uninstall, leftover folders and registry keys are found and scored by
+    confidence. Only Good and VeryGood leftovers are removed.
+  - `winget` handles updates (one app or all) and installs. The output parser reads columns by
+    position, so it works with localized output.
+  - A curated catalog of 53 popular apps; every winget ID was verified.
+- **Smart memory** (`WinSenior.Memory.ps1`):
+  - Frees RAM held by real leftovers: Gradle, Kotlin and Maven daemons, MSBuild nodes,
+    Roslyn and Razor servers, orphaned language servers and Jupyter kernels, a windowless
+    Minecraft JVM, and the WSL VM.
+  - Graceful stop commands run first. A process is only stopped when it is idle, has no
+    window, and has no working child process.
+  - Memory pressure uses Microsoft's thresholds. A non-paged pool leak raises an alarm.
+  - The biggest consumers are listed.
+  - "Fix the cause" sets the Gradle daemon idle timeout and WSL `autoMemoryReclaim`.
+  - An optional background check runs every 10 minutes as the user, with no admin rights
+    and no visible window.
+  - The low-priority standby purge stays manual-only, because purging it by default is a
+    placebo.
+- **Insights** (`WinSenior.Insights.ps1`):
+  - Boot-time history comes from Diagnostics-Performance event 100. The boots before and after
+    the last optimization are compared with a Mann–Whitney U test, a Hodges–Lehmann shift and
+    a 5 % equivalence margin. The verdict is Improved, Worse, "no measurable effect" or
+    Inconclusive.
+  - Boot slowdowns (events 101–110) are listed per app, driver and service.
+  - A days-until-disk-full forecast fits a segmented Theil–Sen trend to disk-history samples.
+    Cleanups are recognized as jumps rather than read as trend.
+  - "Free N GB with the least side effects" solves an exact 0/1 min-cost cover over the last
+    scan.
+- **Statistics library** (`WinSenior.Stats.ps1`): exact and normal-approximation Mann–Whitney
+  U, Hodges–Lehmann with a rank CI, NIST modified Z outliers, type-7 quantiles, MAD,
+  Theil–Sen and the knapsack planner. All of it is pure and pinned by tests.
+- **Cleanup 106 → 110:**
+  - `hiber-reduced`: hiberfil at 20 % of RAM, keeping Fast Startup. Skipped on laptops.
+  - `compactos`: CompactOS, with the state read from the WOF API rather than localized text.
+  - `msi-orphans`: orphaned Windows Installer packages are quarantined for 30 days, never
+    deleted outright. Enumeration across all users is required; on a multi-user PC a failed
+    enumeration refuses to classify anything.
+  - `vhdx-compact`: WSL2 and Docker virtual disks via `diskpart compact vdisk`.
+- Every engine run records a disk-space sample in `%ProgramData%\WinSenior\disk-history.csv`
+  for the forecast.
+- Desktop app and console menu: new **Tools** section with Drivers, Apps, Smart memory and
+  Insights pages (Russian UI included; output streams into the log panel).
 ## [6.4.0] - 2026-11-05
 
 A redesign of the desktop app: a start page, a calmer layout, Russian, and no frozen window.

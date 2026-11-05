@@ -14,7 +14,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.4.0
+    Version : 6.5.0
 #>
 
 # When an engine's stdout is redirected (desktop app, scheduler, CI) emit UTF-8
@@ -165,18 +165,74 @@ function Set-WsRestoreThrottle {
 #   DurationSec; engine-specific counters go in Summary, the per-unit list
 #   in Items. No-op without -ReportPath.
 # =====================================================================
-function Get-WinSeniorVersion { '6.4.0' }
+function Get-WinSeniorVersion { '6.5.0' }
+
+# =====================================================================
+# DISK HISTORY  (feeds the "days until full" forecast in WinSenior.Insights.ps1)
+#   One row per fixed volume per sample: Time,Drive,FreeBytes,SizeBytes.
+#   Sampled whenever any engine writes a report (and by Insights -Sample);
+#   at most one sample per drive per 6 hours, newest 5000 rows kept.
+# =====================================================================
+function Get-WsDiskHistoryPath {
+    if ($env:WINSENIOR_DISK_HISTORY) { return $env:WINSENIOR_DISK_HISTORY }   # tests / portable runs
+    Join-Path $env:ProgramData 'WinSenior\disk-history.csv'
+}
+
+function Add-WsDiskSample {
+    param([string]$Path = (Get-WsDiskHistoryPath), [double]$MinHours = 6)
+    try {
+        $dir = Split-Path $Path -Parent
+        if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force -WhatIf:$false | Out-Null }
+        $rows = New-Object System.Collections.Generic.List[string]
+        if (Test-Path -LiteralPath $Path) { foreach ($l in [IO.File]::ReadAllLines($Path)) { if ($l -and $l -notlike 'Time,*') { $rows.Add($l) } } }
+        $last = @{}
+        foreach ($l in $rows) { $c = $l.Split(','); if ($c.Count -ge 2) { $last[$c[1]] = $c[0] } }
+        $now = (Get-Date).ToUniversalTime()
+        $added = 0
+        foreach ($d in [IO.DriveInfo]::GetDrives()) {
+            if ($d.DriveType -ne 'Fixed' -or -not $d.IsReady) { continue }
+            $letter = $d.Name.Substring(0, 1).ToUpperInvariant()
+            if ($last[$letter]) {
+                $t = [datetime]::Parse($last[$letter], [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)
+                if (($now - $t).TotalHours -lt $MinHours) { continue }
+            }
+            $rows.Add(('{0},{1},{2},{3}' -f $now.ToString('o'), $letter, $d.AvailableFreeSpace, $d.TotalSize)); $added++
+        }
+        if ($added) {
+            $keep = if ($rows.Count -gt 5000) { $rows.GetRange($rows.Count - 5000, 5000) } else { $rows }
+            [IO.File]::WriteAllLines($Path, [string[]](@('Time,Drive,FreeBytes,SizeBytes') + $keep))
+        }
+        $added
+    } catch { Write-Verbose "disk sample: $($_.Exception.Message)"; 0 }
+}
+
+function Get-WsDiskSample {
+    param([string]$Path = (Get-WsDiskHistoryPath), [string]$Drive)
+    if (-not (Test-Path -LiteralPath $Path)) { return @() }
+    foreach ($l in [IO.File]::ReadAllLines($Path)) {
+        if (-not $l -or $l -like 'Time,*') { continue }
+        $c = $l.Split(',')
+        if ($c.Count -lt 4) { continue }
+        if ($Drive -and $c[1] -ne $Drive.Substring(0, 1).ToUpperInvariant()) { continue }
+        [pscustomobject]@{
+            Time = [datetime]::Parse($c[0], [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)
+            Drive = $c[1]; FreeBytes = [int64]$c[2]; SizeBytes = [int64]$c[3]
+        }
+    }
+}
 
 function Write-WinSeniorReport {
     param(
         [string]$ReportPath,
-        [Parameter(Mandatory)][ValidateSet('Cleanup', 'Optimize', 'Repair')][string]$Engine,
+        [Parameter(Mandatory)][ValidateSet('Cleanup', 'Optimize', 'Repair', 'Memory', 'Drivers', 'Apps', 'Insights')][string]$Engine,
         [hashtable]$Summary = @{},
         $Items = @(),
         [bool]$RestorePoint,
         [datetime]$StartTime,
         [scriptblock]$LogAction
     )
+    # Every engine run is a free disk-space sample for the forecast.
+    [void](Add-WsDiskSample)
     if (-not $ReportPath) { return }
     # '{timestamp}' in the path gives every run its own file (scheduled runs keep a
     # history instead of overwriting one report). Resolved once per process so an

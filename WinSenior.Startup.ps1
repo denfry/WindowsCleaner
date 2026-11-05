@@ -30,7 +30,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.3.0
+    Version : 6.5.0
 #>
 
 # =====================================================================

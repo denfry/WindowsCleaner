@@ -261,3 +261,31 @@ Describe 'Remove-EmptyDirectory' {
         Test-Path "$script:Tmp2\keep\file.txt" | Should -BeTrue
     }
 }
+
+Describe 'v6.5 disk-space tasks' {
+    It 'registers the new tasks with safe defaults' {
+        foreach ($id in 'hiber-reduced', 'msi-orphans', 'vhdx-compact', 'compactos') {
+            ($script:Reg | Where-Object Id -eq $id) | Should -Not -BeNullOrEmpty
+        }
+        ($script:Reg | Where-Object Id -eq 'msi-orphans').DefaultOn  | Should -BeFalse
+        ($script:Reg | Where-Object Id -eq 'vhdx-compact').DefaultOn | Should -BeFalse
+        ($script:Reg | Where-Object Id -eq 'compactos').DefaultOn    | Should -BeFalse
+    }
+}
+
+Describe 'Select-InstallerOrphan' {
+    BeforeAll {
+        function New-F { param([string]$Name) [pscustomobject]@{ Name = $Name; FullName = "C:\Windows\Installer\$Name"; Extension = [IO.Path]::GetExtension($Name); Length = 100 } }
+        $script:Files = @((New-F 'a.msi'), (New-F 'b.msp'), (New-F 'c.msi'), (New-F 'AcroRdr.msp'), (New-F 'x.tmp'))
+    }
+    It 'returns unreferenced .msi/.msp only, never Adobe patches or other files' {
+        $ref = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+        [void]$ref.Add('C:\WINDOWS\Installer\a.msi')
+        @(Select-InstallerOrphan -Files $script:Files -Referenced $ref | ForEach-Object Name) | Should -Be @('b.msp', 'c.msi')
+    }
+    It 'refuses to classify anything when enumeration returned nothing' {
+        $empty = New-Object 'System.Collections.Generic.HashSet[string]'
+        @(Select-InstallerOrphan -Files $script:Files -Referenced $empty).Count | Should -Be 0
+        @(Select-InstallerOrphan -Files $script:Files -Referenced $null).Count | Should -Be 0
+    }
+}
