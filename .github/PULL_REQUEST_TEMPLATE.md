@@ -1,37 +1,16 @@
-<!-- Thanks for contributing to WinSenior! Please fill this out. -->
+## What and why
 
-## Summary
+<!-- What changes, and what problem it solves. Link the issue: Closes # -->
 
-<!-- What does this PR change and why? -->
+## Checks
 
-## Type of change
-
-- [ ] Bug fix
-- [ ] New cleanup task / optimization tweak / health check
-- [ ] Behavior change to an existing engine
-- [ ] Documentation only
-- [ ] CI / tooling
-
-## Safety review
-
-<!-- This tool deletes files and changes Windows settings. Confirm the invariants: -->
-
-- [ ] Every new destructive action runs through `ShouldProcess` (real `-WhatIf`)
-- [ ] New paths pass through `Test-SafeToDelete`
-- [ ] Irreversible work is in the **Dangerous** tier; debatable tweaks default **off**
-- [ ] Repairs only improve health (e.g. never disable Defender)
-
-## Testing
-
-<!-- How did you verify this? -->
-
-- [ ] `-WhatIf` preview reviewed on a real machine
+- [ ] New destructive actions go through `ShouldProcess`, and `-WhatIf` changes nothing
+- [ ] Deleted paths pass `Test-SafeToDelete` / `Get-WsLeftoverBlocker`
+- [ ] Irreversible work is in the Dangerous tier; disputed tweaks default off
 - [ ] `Invoke-ScriptAnalyzer -Path . -Severity Error` is clean
-- [ ] `Invoke-Pester -Path .\tests` passes
-- [ ] Added/updated tests for this change
+- [ ] `Invoke-Pester -Path .\tests` passes; tests added for new behavior
+- [ ] `CHANGELOG.md` updated (and README counts, if they changed)
 
-## Checklist
+## How I tested it
 
-- [ ] `CHANGELOG.md` updated
-- [ ] `README.md` updated if user-facing behavior or counts changed
-- [ ] Linked the related issue (if any): closes #
+<!-- Windows build, PowerShell 5.1 and/or 7, what you ran -->

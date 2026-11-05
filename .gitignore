@@ -30,3 +30,6 @@ AGENTS.md
 
 # Release build output
 dist/
+
+# local planning notes
+docs/superpowers/

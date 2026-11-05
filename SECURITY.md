@@ -1,55 +1,44 @@
-# Security Policy
+# Security policy
 
-WinSenior runs with administrator rights and deletes files and changes Windows
-settings, so its security properties matter. Thank you for helping keep it safe.
+WinSenior runs as Administrator, deletes files and runs uninstallers. A bug here can cost
+someone their data, so please report security problems privately.
 
 ## Supported versions
 
-Security fixes are applied to the latest release line.
+Only the latest release gets fixes. Update with the install one-liner from the README.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 6.1.x   | :white_check_mark: |
-| < 6.1   | :x:                |
+| Version | Supported |
+|---------|-----------|
+| 6.5.x   | yes       |
+| < 6.5   | no        |
 
-## Reporting a vulnerability
+## How to report
 
-**Please do not report security issues in public GitHub issues, discussions, or
-pull requests.**
+Open a private advisory on the
+[Security tab](https://github.com/denfry/WindowsCleaner/security/advisories/new). Only the
+maintainer can see it.
 
-Report privately through GitHub's built-in private vulnerability reporting:
+Include:
 
-1. Go to the repository's **[Security](https://github.com/denfry/WindowsCleaner/security)** tab.
-2. Click **Report a vulnerability** to open a private advisory only the maintainers can see.
+- the script and version (`Version` in a JSON report, or the number under the app name);
+- the exact command line or the steps in the app;
+- what happened and what you expected;
+- Windows build and `$PSVersionTable.PSVersion`.
 
-Please include:
+You can expect a reply within 5 working days. Confirmed issues get a patch release, and
+you get credit in the release notes if you want it.
 
-- The script and version (`-Help` / the `Version` field in a JSON report).
-- The exact command line you ran.
-- What happened versus what you expected, and why it is a security concern.
-- Your OS build and PowerShell version (`$PSVersionTable`).
+## In scope
 
-### What to expect
-
-- An acknowledgement, normally within **5 business days**.
-- An assessment and, for confirmed issues, a fix in a patch release.
-- Credit in the release notes if you would like it (let us know).
-
-## What counts as a security issue here
-
-Because this is a privileged system-maintenance tool, examples of in-scope
-issues include:
-
-- A path that bypasses the `Test-SafeToDelete` guard and could delete protected
-  locations (drive roots, `%WINDIR%`, `%USERPROFILE%`, `System32`, etc.).
-- A destructive action that runs even under `-WhatIf` / `-DryRun`.
-- Privilege-escalation, untrusted-input, or path-injection paths via
-  parameters, registry values, or environment variables.
-- An "Aggressive"/"Dangerous" operation that is reachable without its tier flag.
+- A path that gets past `Test-SafeToDelete` or `Get-WsLeftoverBlocker` and deletes a
+  protected location (drive root, Windows, Program Files, a profile or its known folders).
+- A destructive action that runs under `-WhatIf`.
+- Data that a non-admin user controls (HKCU, `%LOCALAPPDATA%`, environment variables, files
+  in user-writable folders) that makes WinSenior run code or delete files with admin rights.
+- A Dangerous operation that runs without `-IncludeDangerous`.
+- The installer accepting a release that does not match `SHA256SUMS.txt`.
 
 ## Out of scope
 
-- Expected data loss from intentionally running the **Dangerous** tier
-  (`-IncludeDangerous`) — this is documented behavior; always preview with
-  `-WhatIf` and keep backups.
-- Issues that require an attacker who already has administrator access.
+- Data lost to the Dangerous tier you turned on yourself.
+- Attacks that already need administrator rights.

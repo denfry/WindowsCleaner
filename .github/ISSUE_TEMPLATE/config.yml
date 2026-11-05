@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 🔒 Report a security vulnerability
+  - name: Report a security vulnerability
     url: https://github.com/denfry/WindowsCleaner/security/advisories/new
-    about: Privately report a security issue — please do not open a public issue.
-  - name: 💬 Questions & ideas (Discussions)
-    url: https://github.com/denfry/WindowsCleaner/discussions
-    about: Ask questions or discuss ideas before filing a feature request.
+    about: Private report, visible only to the maintainer.
+  - name: Questions and help (Discord)
+    url: https://discord.gg/mVZcNUAGZt
+    about: Ask how something works before filing an issue.

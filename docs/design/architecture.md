@@ -1,107 +1,79 @@
 # Architecture
 
-The tool is three single-file PowerShell engines driven by declarative registries — one for
-cleanup, one for optimization, one for troubleshooting — plus an interactive menu that ties
-them together and a batch script that mirrors the cleanup defaults for dependency-free
-environments.
+WinSenior is a set of PowerShell scripts. Three engines do the real work; the desktop app,
+the console menu and the scheduled tasks only start them with parameters.
 
-## Menu front door
+```
+WinSenior.cmd ─┬─ WinSenior.Gui.ps1  (WPF window)
+               └─ WinSenior.ps1      (console menu, -InstallSchedule)
+                        │  child process, same parameters a user would type
+        ┌───────────────┼────────────────┬──────────────────────────┐
+Cleanup-Windows-  Optimize-Windows-  Repair-Windows-   WinSenior.Drivers / Apps /
+Senior.ps1        Senior.ps1         Senior.ps1        Memory / Insights / Startup
+        └───────────────┴────────────────┴──── WinSenior.Common.ps1 (shared helpers)
+```
 
-`WinSenior.ps1` is the single entry point. It self-elevates, dot-sources all three engines as
-libraries (their `InvocationName -ne '.'` entry guards keep them from auto-running), and
-presents numbered screens for cleanup, optimization, troubleshooting, undo, restore point and
-listings. It executes by invoking each engine as a child call (`& $engine @params`); an exact
-toggled selection is reproduced with `-Include <on>` + `-Exclude <off>`.
+## Engines
 
-## Task registry + engine
+Each engine holds a registry: a list of declarative entries built by one constructor.
+The engine selects entries, runs them through `ShouldProcess` and writes a JSON report.
 
-Every cleanup operation is one record in `Get-CleanupTaskRegistry` (Id, Category, Risk,
-DefaultOn, AgeDays, Paths or Action, StopServices). A small engine resolves which tasks to
-run, measures reclaimed space, and deletes through PowerShell's `ShouldProcess`. Adding a
-target is one registry entry.
+| Engine | Registry | Entry fields |
+|---|---|---|
+| Cleanup | `New-CleanupTask` × 110 | Id, Category, Risk, DefaultOn, Paths or Action, AgeDays, StopServices, Processes |
+| Optimize | `New-RegTweak` / `New-SvcTweak` / `New-TaskTweak` / `New-CustomTweak` × 77 | Id, Area, Risk, DefaultOn, Spec (or Test/Backup/Apply/Undo blocks) |
+| Repair | `New-DiagnosticCheck` × 43 | Id, Category, Scan, Fix, FixRisk, Reboot |
 
-### Risk tiers
-- `Safe` — regenerated caches (browsers, temp, thumbnails, dev/app/messenger/game caches).
-- `Moderate` — recycle bin, crash dumps, font cache, WU download cache, DISM cleanup, drive temp.
-- `Aggressive` — full SoftwareDistribution wipe, catroot2, DISM `/ResetBase` + `/SPSuperseded`, SFC.
-- `Dangerous` — irreversible: event-log clearing, `$PatchCache$`, `Windows.old`, superseded driver removal.
+**Selection** is the same everywhere: the risk tier sets the ceiling (`-Conservative`,
+`-IncludeDangerous`), `DefaultOn` picks the defaults, `-Include` forces entries on,
+`-Exclude` wins over everything.
 
-Default: Safe + Moderate + Aggressive run. Dangerous requires `-IncludeDangerous`. A real
-restore point (`Checkpoint-Computer`) is created by default unless `-NoRestorePoint` / `-WhatIf`.
+**Cleanup paths** use tokens: `<USER>` expands to every profile (or the current one with
+`-CurrentUserOnly`), `<DRIVE>` to every local fixed disk, `<STEAM>` / `<STEAMLIB>` to Steam
+folders. Every item passes `Test-SafeToDelete` before deletion. It refuses paths shallower
+than `X:\a\b`, and any path that is, or contains, a protected folder: Windows, Program
+Files, ProgramData, the Users folder, each profile and its known folders. Reparse points
+are deleted as links and never followed. Locked files can be queued for deletion at reboot
+(`-DeferLocked`, `MoveFileEx`).
 
-### Engine functions (single-responsibility)
-`Get-CleanupTaskRegistry`, `Resolve-CleanupSelection`, `Invoke-PathCleanup`
-(ShouldProcess + honest byte/file accounting), `Use-StoppedService`,
-`New-CleanupRestorePoint`, `Invoke-CleanupTask`, `Write-CleanupLog`,
-`Write-CleanupReport` (JSON), `Show-CleanupSummary`.
+**Optimize** snapshots the old value of every tweak into a manifest in
+`%ProgramData%\WinSenior\backups` before applying it. `-Undo` replays a manifest in reverse.
+Custom tweaks restore through their own `Undo` block, looked up by Id.
 
-### Path tokens
-- `<USER>` expands per user profile (`Get-UserProfiles`; all users unless `-CurrentUserOnly`).
-- `<DRIVE>` expands per local fixed disk (`Get-LocalDrives`, DriveType=3), filtered by `-Drives`.
-- `%VAR%` environment variables are expanded normally.
+**Repair** scans first and changes nothing. `-FixAll` applies Safe and Moderate fixes;
+`-IncludeHeavy` adds SFC, DISM RestoreHealth and the Windows Update and network resets.
 
-### Safety guard
-`Test-SafeToDelete` refuses drive roots, `%WINDIR%`, `%USERPROFILE%`, `C:\Users`,
-`System32`, `%ProgramData%`, the Program Files roots, and any path shallower than two
-levels — a backstop against a malformed registry entry or an unexpanded variable.
+## Tools
 
-## Parameters (~15, with aliases)
-`-Category`, `-Include`, `-Exclude`, `-IncludeDangerous`, `-Conservative`,
-`-CurrentUserOnly`, `-Drives`, `-WhatIf` / `-DryRun`, `-Unattended` / `-Force`,
-`-NoRestorePoint`, `-SkipOptimization`, `-MaxAgeDays`, `-LogPath`, `-ReportPath`,
-`-ListTasks`, `-Help`.
+| Script | What it does | Source of truth |
+|---|---|---|
+| `WinSenior.Drivers.ps1` | GPU status, devices with errors, driver updates, backup | Microsoft Update API, `pnputil` |
+| `WinSenior.Apps.ps1` | Inventory, uninstall, leftovers, updates, installs | Uninstall registry keys, Appx, `winget` |
+| `WinSenior.Memory.ps1` | Finds idle processes that hold RAM and stops them | process tree, CPU over a sample window |
+| `WinSenior.Insights.ps1` | Boot-time comparison, disk forecast, cleanup planning | event 100, recorded disk samples, `WinSenior.Stats.ps1` |
+| `WinSenior.Startup.ps1` | Startup entries on/off | `Explorer\StartupApproved`, like Task Manager |
 
-## Categories
-Browsers, DevTools, Apps, Games, System, Disks, Logs, Updates, Optimization
-(57 tasks total; `-ListTasks` prints the live list).
+App leftovers have their own checks (`Get-WsLeftoverBlocker`) and go to a 30-day
+quarantine. Uninstallers from HKCU entries run without elevation, because any program of
+that user can write those keys.
 
-## Optimization engine
-`Optimize-Windows-Senior.ps1` changes Windows settings instead of deleting files. Each tweak
-is one record (`Id, Name, Area, Risk, DefaultOn, Type, Spec`). Types: `Registry` (path + one or
-more values), `Service` (desired startup type), `ScheduledTask` (disable a list), and `Custom`
-(Test/Backup/Apply/Undo scriptblocks for Appx removal, power scheme, hibernation, Nagle).
+## Desktop app
 
-Before each change the engine snapshots prior state and, after the run, writes a JSON backup
-manifest to `%ProgramData%\WinSenior\backups`. `-Undo` reads the newest (or a named) manifest
-and reverts each tweak in reverse order — generically for Registry/Service/ScheduledTask, and via
-the tweak's own `Undo` scriptblock (looked up by Id in the live registry) for Custom. Selection
-(`Resolve-TweakSelection`) and tiers mirror cleanup; debatable tweaks ship `DefaultOn = $false`.
-Areas: Performance, Privacy, Debloat, Network (29 tweaks; `-ListTweaks` prints the live list).
-It never touches Defender real-time protection, Windows Update, the network stack wholesale, or
-Edge/Store.
+`WinSenior.Gui.ps1` is WPF: XAML in a here-string, code-behind in PowerShell. It
+dot-sources the engines only to read their registries and the current tweak state. Every
+action starts the engine as a child process with `-Include`/`-Exclude`, tails its output
+into the log panel and reads the JSON report when the process exits. UI strings go through
+`T '...'`; translations live in `WinSenior.Gui.<lang>.json`.
 
-## Troubleshooting engine
-`Repair-Windows-Senior.ps1` diagnoses and repairs system health. Each check is one record
-(`Id, Name, Category, Scan, Fix, FixRisk, FixLabel, Reboot`). `Scan` is read-only and returns
-`@{ Status = 'OK'|'Warn'|'Fail'; Detail }`; `Fix` is optional. The flow is scan-then-choose:
-`Invoke-Scan` runs every selected check, `Show-ScanReport` prints the grouped health report,
-then fixable issues (Warn/Fail with a Fix) are offered — interactively, or auto-applied with
-`-FixAll` (Safe+Moderate, plus Aggressive under `-IncludeHeavy`). `Invoke-Fix` applies through
-`ShouldProcess` after a restore point. 13 checks across Integrity, Disk, Update, Network,
-Devices, Services, Security and System. Image health uses `Repair-WindowsImage -CheckHealth`
-(locale-independent `ImageHealthState`) rather than parsing DISM text. Repairs only improve
-health — the engine enables Defender, never disables it.
+## Scheduled runs
 
-## Batch script
-`Cleanup-Windows-Senior.bat` is the dependency-free alternative. It mirrors the engine's
-defaults via a per-profile helper, independent per-browser flags, ordered Windows Update
-service stops, all-local-disk cleanup, a Dangerous tier behind `/IncludeDangerous`, and an
-optional real restore point via `/RestorePoint`.
+`WinSenior.Schedule.ps1` copies the scripts to `%ProgramFiles%\WinSenior` (admins only) and
+registers two tasks under `\WinSenior\` that run as SYSTEM from that copy. Running from the
+user's own folder would let a non-admin process replace a script that SYSTEM executes.
 
 ## Tests
-Pester 5 tests (`tests/`) cover the pure logic of all three engines — cleanup selection, the
-safety guard, `<DRIVE>` expansion, age filtering, formatting and `-WhatIf` accounting; the tweak
-registry integrity, `Resolve-TweakSelection`, and a registry backup→apply→undo round-trip against
-a throwaway `HKCU:\Software\WinSeniorTest` hive; and the troubleshooter's check-registry integrity,
-selection, and scan/fix dispatch with synthetic checks. Destructive paths are validated through
-`-WhatIf`. CI runs them on `windows-latest`.
 
-## Desktop app (v6.2)
-
-`WinSenior.Gui.ps1` is a WPF window (XAML embedded as a here-string, code-behind in
-PowerShell). It dot-sources the engines only to read their registries, default selections
-and applied-state probes; every action is a child `powershell.exe`/`pwsh.exe` process
-running the engine script with `-Include/-Exclude` (+ `-WhatIf`, `-Unattended`,
-`-ReportPath`). Stdout is tailed into the log panel by a `DispatcherTimer`; the JSON report
-is parsed when the child exits to fill sizes / health rows. `WinSenior.cmd` is the
-double-click launcher (unblock, elevate, hidden console).
+`tests\` holds Pester 5 suites for each script. They exercise selection, the safety
+checks, `-WhatIf` accounting, a backup → apply → undo round-trip on a throwaway HKCU key,
+scan and fix dispatch with synthetic checks, and the installer against a fake local
+release. CI runs them with PSScriptAnalyzer on `windows-latest`.

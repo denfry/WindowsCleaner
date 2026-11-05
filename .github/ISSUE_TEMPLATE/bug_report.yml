@@ -1,83 +1,84 @@
-name: 🐞 Bug report
-description: Report something that behaves incorrectly
+name: Bug report
+description: Something does the wrong thing or fails
 title: "[Bug]: "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the report! For anything that looks like a **security
-        vulnerability**, do not file here — see [SECURITY.md](../blob/main/SECURITY.md).
-  - type: checkboxes
-    id: prechecks
-    attributes:
-      label: Pre-flight checks
-      options:
-        - label: I searched existing issues and this is not a duplicate
-          required: true
-        - label: I ran the script **as Administrator**
-          required: true
-        - label: I reproduced this after previewing with `-WhatIf` / `-DryRun`
-          required: false
+        Security problems go to the [Security tab](https://github.com/denfry/WindowsCleaner/security/advisories/new), not here.
   - type: dropdown
-    id: engine
+    id: part
     attributes:
-      label: Which part?
+      label: Where
       options:
-        - "Cleanup (Cleanup-Windows-Senior.ps1)"
-        - "Optimization (Optimize-Windows-Senior.ps1)"
-        - "Troubleshooting / Repair (Repair-Windows-Senior.ps1)"
-        - "Menu (WinSenior.ps1)"
-        - "Batch version (Cleanup-Windows-Senior.bat)"
-        - "Scheduler / automation"
-        - "Other / not sure"
+        - "Desktop app"
+        - "Disk cleanup"
+        - "Optimize / undo"
+        - "Troubleshoot"
+        - "Startup apps"
+        - "Drivers"
+        - "Apps (uninstall / winget)"
+        - "Smart memory"
+        - "Insights"
+        - "Installer (install.ps1)"
+        - "Scheduled tasks"
+        - "Console menu"
+        - "Batch file"
+        - "Other"
     validations:
       required: true
-  - type: textarea
-    id: command
+  - type: input
+    id: version
     attributes:
-      label: Exact command you ran
-      description: The full command line, including parameters.
-      render: powershell
-      placeholder: .\Cleanup-Windows-Senior.ps1 -Category Browsers -WhatIf
+      label: WinSenior version
+      description: Shown under the app name, or `Version` in a JSON report.
+      placeholder: "6.5.1"
     validations:
       required: true
   - type: textarea
     id: what-happened
     attributes:
-      label: What happened?
-      description: What went wrong, and what did you expect instead?
+      label: What happened, and what did you expect?
     validations:
       required: true
   - type: textarea
-    id: repro
+    id: steps
     attributes:
-      label: Steps to reproduce
-      placeholder: |
-        1. Run ...
-        2. Select ...
-        3. See ...
+      label: Steps or command line
+      description: The buttons you pressed, or the full command with parameters.
+      render: powershell
+      placeholder: .\Cleanup-Windows-Senior.ps1 -Category Browsers -WhatIf
     validations:
-      required: false
+      required: true
   - type: textarea
-    id: logs
+    id: log
     attributes:
-      label: Log / report excerpt
-      description: Relevant lines from the log (`%TEMP%\WindowsCleanup.log`) or a JSON report. Redact anything private.
+      label: Log
+      description: |
+        In the app: Log > Save. Console: `%TEMP%\WindowsCleanup.log` (or WindowsOptimize.log / WindowsRepair.log). Remove anything private.
       render: text
-    validations:
-      required: false
   - type: input
-    id: os
+    id: windows
     attributes:
-      label: Windows version
-      description: From `winver` (e.g. Windows 11 23H2, build 22631).
+      label: Windows version and build
+      description: Run `winver`.
+      placeholder: Windows 11 24H2, build 26100.2314
     validations:
       required: true
   - type: input
-    id: psversion
+    id: powershell
     attributes:
       label: PowerShell version
-      description: Output of `$PSVersionTable.PSVersion`.
+      description: "`$PSVersionTable.PSVersion`"
     validations:
       required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I ran it as Administrator
+          required: true
+        - label: I searched the open issues
+          required: true
