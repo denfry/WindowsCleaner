@@ -1,7 +1,7 @@
 # Windows System Cleaner and Optimizer 🧹
 
 [![CI](https://github.com/denfry/WindowsCleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/denfry/WindowsCleaner/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-6.3.0-blue.svg)](https://github.com/denfry/WindowsCleaner)
+[![Version](https://img.shields.io/badge/version-6.4.0-blue.svg)](https://github.com/denfry/WindowsCleaner)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![PowerShell](https://img.shields.io/badge/powershell-5.1%2B%20%7C%207%2B-blue.svg)](https://learn.microsoft.com/powershell/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](https://www.microsoft.com/windows/)
@@ -81,31 +81,42 @@ Administrator once (UAC) and opens **Windows Senior** without a console window.
 `.\WinSenior.ps1 -Gui` does the same from PowerShell; `.\WinSenior.cmd console` opens
 the arrow-key menu instead.
 
-The app has eight pages:
+The app speaks **English and Russian** (it follows the Windows display language; switch it
+under *Settings*). It has nine pages:
 
-- **Disk cleanup** — every task with its category and risk badge. *Scan* runs the real
-  `-WhatIf` dry run and fills a "Would free" column per task; *Clean now* runs the checked
-  tasks. Options: current user only, restore point, delete locked files at reboot, close
-  running browsers, skip SFC/DISM, Conservative, minimum file age, which disks. Dangerous
-  tasks are never pre-checked, and *Clean now* shows a confirmation with the estimate first.
-  A filter box, sortable columns and tooltips with each task's paths on every list.
-- **Optimize** — all tweaks with their live *applied / not applied* state; preview or apply,
-  restore point first, every applied tweak is backed up.
-- **Troubleshoot** — read-only scan with OK / Warn / Fail per check and the detail text;
-  tick the problems to repair and press *Fix selected*, or auto-fix everything.
-- **Startup apps** — everything that starts with Windows (Run keys, Startup folders);
-  untick to disable it exactly the way Task Manager does — the entry is kept, so ticking it
-  again restores it.
-- **History** — every run's report (app and scheduled), all-time total freed, HTML export.
-- **Undo & restore** — list of optimization backup manifests (undo newest or a chosen one),
-  create a System Restore point, open System Restore, open log folders.
-- **Schedule** — install/remove the recurring Task Scheduler jobs and see their next run.
-- **About** — versions, counts, paths.
+- **Overview** — the start page: computer, Windows build and uptime, a free-space bar per
+  disk, the last cleanup, how many tweaks are applied and how many apps start with Windows,
+  plus the recent runs. **Smart scan** measures the junk (cleanup dry run) and runs the
+  read-only health checks in one go; *Clean now* and *Review* act on the result.
+- **Disk cleanup** — tasks grouped by category (collapsible, with *select all / none* per
+  group) and a risk badge each. *Scan* runs the real `-WhatIf` dry run and fills a
+  "Would free" column; *Clean now* runs the ticked tasks after a confirmation with the
+  estimate. *Options* opens restore point, close running browsers, delete locked files at
+  reboot, Conservative, current user only, skip SFC/DISM, minimum file age and disks.
+  Dangerous tasks are never pre-ticked. Hover a task to see exactly which folders it touches.
+- **Optimize** — tweaks grouped by area with their live *Applied / Not applied* state (read
+  in the background, the window never freezes); preview or apply, restore point first, every
+  applied tweak is backed up.
+- **Troubleshoot** — read-only scan with problem / warning / healthy counters and the detail
+  per check; tick the problems to repair and press *Fix selected*, or fix everything.
+- **Startup apps** — everything that starts with Windows (Run keys, Startup folders) with an
+  on/off switch that disables it exactly the way Task Manager does — the entry is kept, so
+  switching it on restores it.
+- **History** — every run's report (app and scheduled), all-time total freed; double-click a
+  run to open it as a web page.
+- **Undo & restore** — optimization backups (undo newest or a chosen one), create a System
+  Restore point, open System Restore, open log folders.
+- **Schedule** — install/remove the recurring Task Scheduler jobs, see their state, next and
+  last run.
+- **Settings & about** — language, versions, counts, paths, keyboard shortcuts.
 
-Engine output streams into the log panel at the bottom (resizable, saveable, cancellable).
-The app never re-implements deletion: it launches the same engine scripts with parameters,
-so `-WhatIf`, the safety guard, restore points and undo are exactly the ones documented below.
-Selections and options persist in `%ProgramData%\WinSenior\gui-settings.json`.
+After every run a banner sums up the result; the engine output streams into a log drawer
+(*Log* button or Ctrl+L — resizable, saveable). Shortcuts: Ctrl+1…9 switch pages, Ctrl+F
+search, F5 scan/refresh. Without administrator rights a banner offers *Restart as
+administrator*. The app never re-implements deletion: it launches the same engine scripts
+with parameters, so `-WhatIf`, the safety guard, restore points and undo are exactly the
+ones documented below. Selections, options, language and window size persist in
+`%ProgramData%\WinSenior\gui-settings.json`.
 
 ## The console menu
 
@@ -383,7 +394,7 @@ Every engine's `-ReportPath` writes the same envelope, so one parser reads them 
 
 ```json
 {
-  "Tool": "WinSenior", "Version": "6.3.0", "Engine": "Cleanup",
+  "Tool": "WinSenior", "Version": "6.4.0", "Engine": "Cleanup",
   "Host": "PC01", "Timestamp": "2026-06-24T03:00:11", "Mode": "Live",
   "RestorePoint": true, "DurationSec": 42.3,
   "Summary": { "TotalFreed": "1.20 GB", "TotalFiles": 8123, "TotalErrors": 2 },

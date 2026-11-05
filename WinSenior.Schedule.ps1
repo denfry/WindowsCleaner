@@ -105,7 +105,9 @@ function New-WinSeniorTrigger {
             $t = New-CimInstance -CimClass $cls -ClientOnly
             $t.DaysOfMonth   = 1 -shl ([int]$Spec.Day - 1)  # day 1 -> bit 0 -> 1
             $t.MonthOfYear   = 0xFFF                          # all 12 months
-            $t.StartBoundary = $at.ToString('yyyy-MM-ddTHH:mm:ss')
+            # Invariant culture: ':' in a .NET format is the CULTURE's time separator
+            # (fi-FI '.'), which Task Scheduler rejects.
+            $t.StartBoundary = $at.ToString('yyyy-MM-ddTHH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture)
             $t.Enabled       = $true
             return $t
         }

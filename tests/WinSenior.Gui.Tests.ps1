@@ -15,7 +15,8 @@ BeforeAll {
     . (Join-Path $PSScriptRoot '..\WinSenior.Common.ps1')
     $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script:Gui), [ref]$null, [ref]$null)
     $want = 'ConvertTo-WsCmdArg', 'Get-WsMaxAge', 'Get-WsSelectionArg', 'Split-WsLogChunk', 'Format-WsEngineLine',
-            'Get-WsStepName', 'ConvertTo-WsDate', 'Get-WsHistoryEntry', 'ConvertTo-WsReportHtml'
+            'Get-WsStepName', 'ConvertTo-WsDate', 'Get-WsHistoryEntry', 'ConvertTo-WsReportHtml',
+            'T', 'Get-WsRegText', 'Resolve-WsLanguage', 'Import-WsLanguage', 'Format-WsSize'
     $defs = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $want -contains $n.Name }, $false)
     foreach ($d in $defs) { . ([scriptblock]::Create($d.Extent.Text)) }
     $pat = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and
@@ -51,13 +52,13 @@ Describe 'WinSenior.Gui.ps1' {
         $missing = @($used | Where-Object { $_ -notin $named })
         $missing | Should -BeNullOrEmpty
     }
-    It 'has a page for every nav button (incl. Startup and History)' {
-        foreach ($p in 'PageClean', 'PageOpt', 'PageRepair', 'PageStartup', 'PageHistory', 'PageUndo', 'PageSchedule', 'PageAbout') {
+    It 'has a page for every nav button (incl. Overview, Startup and History)' {
+        foreach ($p in 'PageHome', 'PageClean', 'PageOpt', 'PageRepair', 'PageStartup', 'PageHistory', 'PageUndo', 'PageSchedule', 'PageAbout') {
             $script:XamlText | Should -Match "x:Name=`"$p`""
         }
     }
     It 'wraps the static pages in a ScrollViewer so they never get cut off' {
-        foreach ($p in 'PageUndo', 'PageSchedule', 'PageAbout') {
+        foreach ($p in 'PageHome', 'PageUndo', 'PageSchedule', 'PageAbout') {
             $script:XamlText | Should -Match "<ScrollViewer x:Name=`"$p`""
         }
     }
@@ -235,6 +236,68 @@ Describe 'GUI helpers' {
             $html | Should -Not -Match '<script'
             $html | Should -Not -Match '(src|href)="http'
         }
+    }
+}
+
+Describe 'GUI language' {
+    BeforeAll {
+        $script:PackPath = Join-Path $PSScriptRoot '..\WinSenior.Gui.ru.json'
+        $script:Pack = Import-WsLanguage (Resolve-Path $script:PackPath)
+    }
+    AfterEach { $script:Tr = $null; $script:TrReg = @{} }
+
+    It 'picks the language from the setting, else from the Windows display language' {
+        Resolve-WsLanguage -Setting 'auto' -UiCulture 'ru-RU' | Should -Be 'ru'
+        Resolve-WsLanguage -Setting 'auto' -UiCulture 'en-US' | Should -Be 'en'
+        Resolve-WsLanguage -Setting 'en'   -UiCulture 'ru-RU' | Should -Be 'en'
+        Resolve-WsLanguage -Setting 'ru'   -UiCulture 'de-DE' | Should -Be 'ru'
+        Resolve-WsLanguage -Setting 'xx'   -UiCulture 'de-DE' | Should -Be 'en'
+    }
+    It 'falls back to the English text when nothing is loaded' {
+        $script:Tr = $null
+        T 'Scan' | Should -Be 'Scan'
+        T '' | Should -Be ''
+    }
+    It 'loads the Russian pack (UTF-8) and translates through it' {
+        $script:Tr = $script:Pack.Ui
+        # "Scan" -> a Cyrillic word starting with U+041F, decoded intact (no mojibake).
+        [int][char](T 'Scan')[0] | Should -Be 0x041F
+        (T 'GB') | Should -Not -Be 'GB'
+    }
+    It 'keeps "None" and "Clear" style keys distinct (no keys that differ only by case)' {
+        # ConvertFrom-Json (pwsh) refuses an object whose keys differ only by case - the pack would not load at all.
+        $json = [System.IO.File]::ReadAllText((Resolve-Path $script:PackPath), [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+        foreach ($section in 'ui', 'groups', 'tasks', 'tweaks', 'checks') {
+            $dups = @($json.$section.PSObject.Properties.Name | Group-Object { $_.ToLowerInvariant() } | Where-Object Count -gt 1 | ForEach-Object Name)
+            $dups | Should -BeNullOrEmpty -Because "section '$section'"
+        }
+    }
+    It 'translates every T ''...'' text of the window' {
+        $have = $script:Pack.Ui
+        $missing = @([regex]::Matches($script:Src, "\(?\bT '((?:[^']|'')*)'") | ForEach-Object { $_.Groups[1].Value.Replace("''", "'") } |
+            Sort-Object -Unique | Where-Object { $_ -and -not $have.ContainsKey($_) })
+        $missing | Should -BeNullOrEmpty
+    }
+    It 'keeps every {n} placeholder of the English text in the translation' {
+        $bad = @(foreach ($k in $script:Pack.Ui.Keys) {
+            $a = @([regex]::Matches($k, '\{\d+\}') | ForEach-Object Value | Sort-Object -Unique) -join ','
+            $b = @([regex]::Matches($script:Pack.Ui[$k], '\{\d+\}') | ForEach-Object Value | Sort-Object -Unique) -join ','
+            if ($a -ne $b) { "$k -> $($script:Pack.Ui[$k])" }
+        })
+        $bad | Should -BeNullOrEmpty
+    }
+    It 'has names for the registry entries and reads them by id' {
+        $script:Pack.Reg['tasks'].Count  | Should -BeGreaterThan 30
+        $script:Pack.Reg['tweaks'].Count | Should -BeGreaterThan 20
+        $script:Pack.Reg['checks'].Count | Should -BeGreaterThan 10
+        $script:TrReg = $script:Pack.Reg
+        Get-WsRegText 'tasks' 'chrome' 'name' 'Chrome cache' | Should -Not -Be 'Chrome cache'
+        Get-WsRegText 'tasks' 'no-such-task' 'name' 'Fallback' | Should -Be 'Fallback'
+    }
+    It 'formats sizes with the unit in the UI language' {
+        Format-WsSize 2048 | Should -Match 'KB$'
+        $script:Tr = $script:Pack.Ui
+        Format-WsSize 2048 | Should -Not -Match 'KB$'
     }
 }
 

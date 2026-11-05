@@ -123,6 +123,7 @@ if ($DryRun) { $WhatIfPreference = $true }
 $Include = @($Include | ForEach-Object { "$_" -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $Exclude = @($Exclude | ForEach-Object { "$_" -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $Drives  = @($Drives  | ForEach-Object { "$_" -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$Category = @($Category | ForEach-Object { "$_" -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 
 # Paths the engine must never operate on, no matter what a task or env var says.
 $script:DenyList = @(
@@ -1069,29 +1070,45 @@ function Get-CleanupTaskRegistry {
         New-CleanupTask memory-standby 'Purge standby memory list & trim working sets (frees RAM, not disk)' System Safe -DefaultOn $false -Action {
             # Same documented NtSetSystemInformation(SystemMemoryListInformation) call RAMMap uses.
             if (Test-WhatIfMode) { Write-CleanupLog '[WhatIf] would purge standby memory list' 'WhatIf'; return $null }
-            if (-not ('WinSenior.Memory' -as [type])) {
-                Add-Type -Namespace WinSenior -Name Memory -MemberDefinition @'
+            # TOKEN_PRIVILEGES is { DWORD Count; LUID Luid; DWORD Attributes } with 4-byte packing:
+            # the LUID sits at offset 4 (a C# 'long' field would be aligned to 8 and the
+            # privilege silently never enabled), so it is two 32-bit halves. Type name
+            # bumped (Memory2) so a session that loaded the old layout still gets this one.
+            if (-not ('WinSenior.Memory2' -as [type])) {
+                Add-Type -Namespace WinSenior -Name Memory2 -MemberDefinition @'
 [DllImport("ntdll.dll")] public static extern int NtSetSystemInformation(int cls, ref int info, int len);
 [DllImport("advapi32.dll", SetLastError=true)] public static extern bool OpenProcessToken(IntPtr h, int acc, out IntPtr tok);
-[DllImport("advapi32.dll", SetLastError=true, CharSet=CharSet.Unicode)] public static extern bool LookupPrivilegeValue(string s, string n, out long luid);
+[DllImport("advapi32.dll", SetLastError=true, CharSet=CharSet.Unicode)] public static extern bool LookupPrivilegeValue(string s, string n, out LUID luid);
 [DllImport("advapi32.dll", SetLastError=true)] public static extern bool AdjustTokenPrivileges(IntPtr tok, bool dis, ref TOKP np, int len, IntPtr prev, IntPtr ret);
-[StructLayout(LayoutKind.Sequential)] public struct TOKP { public int Count; public long Luid; public int Attr; }
+[DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
+[StructLayout(LayoutKind.Sequential)] public struct LUID { public uint Low; public int High; }
+[StructLayout(LayoutKind.Sequential, Pack = 4)] public struct TOKP { public int Count; public LUID Luid; public int Attr; }
 public static bool Enable(string name) {
     IntPtr tok; if (!OpenProcessToken(System.Diagnostics.Process.GetCurrentProcess().Handle, 0x28, out tok)) return false;
-    TOKP tp; tp.Count = 1; tp.Attr = 2; if (!LookupPrivilegeValue(null, name, out tp.Luid)) return false;
-    return AdjustTokenPrivileges(tok, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+    try {
+        TOKP tp; tp.Count = 1; tp.Attr = 2; if (!LookupPrivilegeValue(null, name, out tp.Luid)) return false;
+        // AdjustTokenPrivileges returns TRUE even when nothing was assigned; ERROR_NOT_ALL_ASSIGNED = 1300.
+        return AdjustTokenPrivileges(tok, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero) && Marshal.GetLastWin32Error() != 1300;
+    } finally { CloseHandle(tok); }
 }
 '@ -ErrorAction SilentlyContinue
             }
-            if (-not ('WinSenior.Memory' -as [type])) { return $null }
-            [void][WinSenior.Memory]::Enable('SeProfileSingleProcessPrivilege')
-            [void][WinSenior.Memory]::Enable('SeIncreaseQuotaPrivilege')
+            if (-not ('WinSenior.Memory2' -as [type])) { return $null }
+            if (-not [WinSenior.Memory2]::Enable('SeProfileSingleProcessPrivilege')) {
+                Write-CleanupLog '  Could not enable SeProfileSingleProcessPrivilege - standby list not purged' 'Warning'
+                return $null
+            }
+            [void][WinSenior.Memory2]::Enable('SeIncreaseQuotaPrivilege')
             $before = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory * 1KB
+            $failed = @()
             foreach ($cmd in 4, 2) {   # 4 = purge standby list, 2 = empty working sets
                 $v = [int]$cmd
-                [void][WinSenior.Memory]::NtSetSystemInformation(80, [ref]$v, 4)
+                $st = [WinSenior.Memory2]::NtSetSystemInformation(80, [ref]$v, 4)
+                if ($st -ne 0) { $failed += ('{0} (NTSTATUS 0x{1:X8})' -f $cmd, $st) }
             }
             $after = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory * 1KB
+            if ($failed.Count -eq 2) { Write-CleanupLog "  Memory purge failed: $($failed -join ', ')" 'Warning'; return $null }
+            if ($failed.Count) { Write-CleanupLog "  Memory purge partly failed: $($failed -join ', ')" 'Warning' }
             Write-CleanupLog ("  RAM freed: {0}" -f (Format-FileSize ([Math]::Max([int64]0, [int64]($after - $before))))) 'Success'
             $null
         }

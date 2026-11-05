@@ -25,6 +25,7 @@ $version = Get-WinSeniorVersion
 # install.ps1 is the one-line web installer: shipped NEXT TO the zip, not inside it.
 $include = @(Get-ChildItem -Path $root -Filter *.ps1 -File | Where-Object { $_.Name -ne 'install.ps1' } |
              ForEach-Object { $_.Name }) +
+           @(Get-ChildItem -Path $root -Filter 'WinSenior.Gui.*.json' -File | ForEach-Object { $_.Name }) +
            @('WinSenior.cmd', 'Cleanup-Windows-Senior.bat', 'README.md', 'LICENSE', 'CHANGELOG.md')
 $files = foreach ($f in $include) { $p = Join-Path $root $f; if (Test-Path $p) { $p } }
 

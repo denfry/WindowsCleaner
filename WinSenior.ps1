@@ -339,7 +339,14 @@ function Show-MainMenu {
             2 { Show-TroubleshootScreen }
             3 { Invoke-FullRun }
             4 { Write-Banner 'Undo optimizations'; & $script:OptimizeScript -Undo; Wait-Enter }
-            5 { Write-Banner 'Create restore point'; New-CleanupRestorePoint | Out-Null; Wait-Enter }
+            5 {
+                # All three engines are dot-sourced here, so their shared $LogPath default ends up as
+                # the LAST engine's log - name the cleanup log explicitly.
+                Write-Banner 'Create restore point'
+                [void](New-WinSeniorRestorePoint -Description "WinSenior manual $(Get-Date -Format 'yyyy-MM-dd HH:mm')" `
+                    -LogAction { param($m, $l) Write-WsLog -Message $m -Level $l -LogPath (Join-Path $env:TEMP 'WindowsCleanup.log') })
+                Wait-Enter
+            }
             6 { Write-Banner 'Tasks, tweaks & checks'; Show-TaskList; Show-TweakList; Show-CheckList; Wait-Enter }
             $null { Write-Host ''; Write-Host '  Bye.' -ForegroundColor Cyan; return }
         }

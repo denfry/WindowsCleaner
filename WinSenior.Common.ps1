@@ -14,7 +14,7 @@
 
 .NOTES
     Author : denfry  (https://github.com/denfry/WindowsCleaner)
-    Version : 6.3.0
+    Version : 6.4.0
 #>
 
 # When an engine's stdout is redirected (desktop app, scheduler, CI) emit UTF-8
@@ -165,7 +165,7 @@ function Set-WsRestoreThrottle {
 #   DurationSec; engine-specific counters go in Summary, the per-unit list
 #   in Items. No-op without -ReportPath.
 # =====================================================================
-function Get-WinSeniorVersion { '6.3.0' }
+function Get-WinSeniorVersion { '6.4.0' }
 
 function Write-WinSeniorReport {
     param(

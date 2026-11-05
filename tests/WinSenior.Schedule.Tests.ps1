@@ -59,6 +59,19 @@ Describe 'Get-WinSeniorScheduleSpec' {
     }
 }
 
+Describe 'New-WinSeniorTrigger' {
+    It 'writes the monthly start time with ":" even where the culture uses "." (fi-FI)' {
+        $old = [System.Threading.Thread]::CurrentThread.CurrentCulture
+        try {
+            [System.Threading.Thread]::CurrentThread.CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo('fi-FI')
+            $t = New-WinSeniorTrigger -Spec ([pscustomobject]@{ Cadence = 'Monthly'; Day = 1; Time = '03:30' })
+            $t.StartBoundary | Should -Match 'T03:30:00$'
+            $t.MonthOfYear | Should -Be 0xFFF
+        }
+        finally { [System.Threading.Thread]::CurrentThread.CurrentCulture = $old }
+    }
+}
+
 Describe 'Program Files copy helpers' {
     BeforeEach {
         $script:Src = Join-Path $env:TEMP ("ws-sched-src-{0}" -f [guid]::NewGuid().ToString('N'))

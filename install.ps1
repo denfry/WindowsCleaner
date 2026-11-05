@@ -160,11 +160,26 @@ function Invoke-WinSeniorInstall {
         # (WebClient + ZipFile never write a Mark-of-the-Web, so no Unblock-File is needed;
         # WinSenior.cmd unblocks again on every start anyway.)
         if (-not (Test-Path -LiteralPath $InstallRoot)) { New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null }
-        if (Test-Path -LiteralPath $appDir) {
-            try { Remove-Item -LiteralPath $appDir -Recurse -Force }
-            catch { throw "Close Windows Senior first - the old version is in use ($($_.Exception.Message))." }
+        # Copy the new files next to the target FIRST (same volume - a directory move across
+        # drives fails on Windows PowerShell 5.1), and only then swap: the old version is
+        # never removed before the new one is complete on disk.
+        $next = Join-Path $InstallRoot 'app.new'
+        if (Test-Path -LiteralPath $next) { Remove-Item -LiteralPath $next -Recurse -Force }
+        Copy-Item -LiteralPath $staged -Destination $next -Recurse -Force
+        # Renaming fails as a whole while a file inside is open, so the old app stays intact.
+        $oldName = 'app.old-{0}' -f [guid]::NewGuid().ToString('N').Substring(0, 8)
+        $hadOld = Test-Path -LiteralPath $appDir
+        if ($hadOld) {
+            try { Rename-Item -LiteralPath $appDir -NewName $oldName -ErrorAction Stop }
+            catch {
+                Remove-Item -LiteralPath $next -Recurse -Force -ErrorAction SilentlyContinue
+                throw "Close Windows Senior first - the old version is in use ($($_.Exception.Message))."
+            }
         }
-        Move-Item -LiteralPath $staged -Destination $appDir
+        Rename-Item -LiteralPath $next -NewName (Split-Path $appDir -Leaf)
+        if ($hadOld) { Remove-Item -LiteralPath (Join-Path $InstallRoot $oldName) -Recurse -Force -ErrorAction SilentlyContinue }
+        Get-ChildItem -LiteralPath $InstallRoot -Directory -Filter 'app.old-*' -ErrorAction SilentlyContinue |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         Write-Ok 'Installed'
     }
     finally {
